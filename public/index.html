@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Polywerk OÜ - Business Management System" />
+    <meta name="theme-color" content="#0a0f1a" />
+    <link rel="icon" type="image/png" href="/Polywerk_newlogo_color.png" />
+    <link rel="apple-touch-icon" href="/Polywerk_newlogo_color.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              gray: {
+                50: '#f0f4f8',
+                100: '#d9e2ec',
+                200: '#bcccdc',
+                300: '#9fb3c8',
+                400: '#829ab1',
+                500: '#627d98',
+                600: '#486581',
+                700: '#334e68',
+                800: '#1e3a5f',
+                900: '#102a43',
+                950: '#0a1929',
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <title>Polywerk - Business Manager</title>
+    <style>
+      /* Dark blue theme - no black */
+      body {
+        background-color: #0f172a !important;
+      }
+      
+      /* Cards - dark blue */
+      .bg-gray-900 {
+        background-color: #1e293b !important;
+      }
+      
+      .bg-gray-800 {
+        background-color: #334155 !important;
+      }
+      
+      .bg-gray-800\/50 {
+        background-color: rgba(30, 41, 59, 0.5) !important;
+      }
+      
+      .bg-gray-800\/30 {
+        background-color: rgba(30, 41, 59, 0.3) !important;
+      }
+      
+      /* Borders - blue tinted */
+      .border-gray-800 {
+        border-color: #1e3a5f !important;
+      }
+      
+      .border-gray-700 {
+        border-color: #334e68 !important;
+      }
+      
+      /* Text colors */
+      .text-zinc-400, .text-gray-400 {
+        color: #94a3b8 !important;
+      }
+      
+      .text-zinc-300, .text-gray-300 {
+        color: #cbd5e1 !important;
+      }
+      
+      .text-zinc-500, .text-gray-500 {
+        color: #64748b !important;
+      }
+      
+      .text-white {
+        color: #f1f5f9 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>

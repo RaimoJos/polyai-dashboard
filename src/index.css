@@ -1,0 +1,61 @@
+/* src/index.css */
+/* Polywerk - Dark Blue Theme */
+
+/* Reset */
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: #0f172a;
+  color: #f1f5f9;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Polywerk brand colors - Dark Blue (no black) */
+:root {
+  --polywerk-bg: #0f172a;
+  --polywerk-card: #1e293b;
+  --polywerk-card-light: #334155;
+  --polywerk-accent: #a855f7;
+  --polywerk-accent-secondary: #06b6d4;
+  --polywerk-border: #1e3a5f;
+  --polywerk-border-light: #334e68;
+  --polywerk-text: #f1f5f9;
+  --polywerk-text-secondary: #94a3b8;
+  --polywerk-text-muted: #64748b;
+}
+
+/* Links */
+a { color: inherit; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Layout helpers */
+.container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+main { padding: 16px; }
+
+/* Panel / sections */
+.panel {
+  background: var(--polywerk-card);
+  border: 1px solid var(--polywerk-border);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #334e68;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #486581;
+}
