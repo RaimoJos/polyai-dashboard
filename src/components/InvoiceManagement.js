@@ -3,6 +3,8 @@ import { api, unwrap } from '../services/api';
 import { sanitizeText } from '../utils/sanitization';
 import { useLanguage } from '../i18n';
 import toast from '../utils/toast';
+import InvoicePDFPreview from './InvoicePDFPreview';
+import { DEFAULT_COMPANY } from '../utils/estonianInvoice';
 
 /**
  * InvoiceManagement - Manage business invoices
@@ -12,6 +14,7 @@ const InvoiceManagement = () => {
   const { t } = useLanguage();
   const [invoices, setInvoices] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,6 +22,8 @@ const InvoiceManagement = () => {
   const [paymentModal, setPaymentModal] = useState(null);
   const [createModal, setCreateModal] = useState(null);
   const [detailsModal, setDetailsModal] = useState(null);
+  const [pdfPreviewModal, setPdfPreviewModal] = useState(null);
+  const [pdfPreviewClient, setPdfPreviewClient] = useState(null);
   const [paymentData, setPaymentData] = useState({ method: 'bank_transfer', reference: '' });
 
   useEffect(() => {
@@ -30,16 +35,19 @@ const InvoiceManagement = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [invoicesRes, ordersRes] = await Promise.all([
+      const [invoicesRes, ordersRes, clientsRes] = await Promise.all([
         api.listInvoices().catch(() => []),
-        api.listOrders({ status: 'all' }).catch(() => [])
+        api.listOrders({ status: 'all' }).catch(() => []),
+        api.getClients().catch(() => [])
       ]);
       
       const invoicesData = Array.isArray(invoicesRes) ? invoicesRes : (invoicesRes?.data ?? invoicesRes?.invoices ?? []);
       const ordersData = Array.isArray(ordersRes) ? ordersRes : (ordersRes?.data ?? ordersRes?.orders ?? []);
+      const clientsData = Array.isArray(clientsRes) ? clientsRes : (clientsRes?.data ?? clientsRes?.clients ?? []);
       
       setInvoices(invoicesData);
       setOrders(ordersData);
+      setClients(clientsData);
     } catch (err) {
       console.error('Failed to load invoices:', err);
     } finally {
@@ -125,6 +133,79 @@ const InvoiceManagement = () => {
     return new Date(dateStr).toLocaleDateString('et-EE');
   };
 
+  // Find client by ID or name - first check if invoice has embedded client data
+  const findClient = (invoice) => {
+    if (!invoice) return null;
+    
+    // Helper to check if client object has useful data (beyond just name)
+    const hasUsefulClientData = (client) => {
+      if (!client || typeof client !== 'object') return false;
+      return !!(client.address || client.reg_number || client.vat_number || client.city || client.postal_code);
+    };
+    
+    // FIRST: Check if invoice already has embedded client data with useful info
+    if (invoice.client && hasUsefulClientData(invoice.client)) {
+      // Invoice has full client data from backend
+      return {
+        client_id: invoice.client.client_id || invoice.client_id || '',
+        name: invoice.client.name || invoice.client_name || '',
+        company: invoice.client.company || invoice.client.name || '',
+        email: invoice.client.email || '',
+        phone: invoice.client.phone || '',
+        address: invoice.client.address || '',
+        city: invoice.client.city || '',
+        postal_code: invoice.client.postal_code || '',
+        county: invoice.client.county || '',
+        reg_number: invoice.client.reg_number || '',
+        vat_number: invoice.client.vat_number || '',
+      };
+    }
+    
+    // SECOND: Try to find in clients list by client_id
+    if (invoice.client_id) {
+      const client = clients.find(c => 
+        c.client_id === invoice.client_id || 
+        c.id === invoice.client_id
+      );
+      if (client) return client;
+    }
+    
+    // THIRD: Fall back to matching by name (case-insensitive, normalize characters)
+    const normalize = (str) => (str || '').toLowerCase().replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ä/g, 'a').replace(/õ/g, 'o').trim();
+    const invoiceName = normalize(invoice.client_name || invoice.client?.name);
+    
+    if (invoiceName) {
+      const client = clients.find(c => {
+        const name = normalize(c.name);
+        const company = normalize(c.company);
+        return name === invoiceName || company === invoiceName ||
+               name.includes(invoiceName) || invoiceName.includes(name) ||
+               company.includes(invoiceName) || invoiceName.includes(company);
+      });
+      if (client) return client;
+    }
+    
+    // LAST: Return basic info from invoice if no client found
+    console.log('[InvoiceManagement] Could not find client for invoice:', {
+      invoice_number: invoice.invoice_number,
+      client_id: invoice.client_id,
+      client_name: invoice.client_name || invoice.client?.name,
+      available_clients: clients.map(c => ({ id: c.client_id, name: c.name, company: c.company }))
+    });
+    
+    return {
+      name: invoice.client_name || invoice.client?.name || '',
+      company: invoice.client?.company || invoice.client_name || invoice.client?.name || '',
+    };
+  };
+
+  // Open PDF preview with full client info
+  const openPdfPreview = (invoice) => {
+    const client = findClient(invoice);
+    setPdfPreviewClient(client);
+    setPdfPreviewModal(invoice);
+  };
+
   const getStatusColor = (invoice) => {
     if (invoice.status === 'paid') return 'bg-green-500/20 text-green-400 border-green-500/30';
     const dueDate = new Date(invoice.due_date);
@@ -164,22 +245,94 @@ const InvoiceManagement = () => {
     
     try {
       const order = createModal;
+      
+      // Find full client data
+      let clientData = {};
+      if (order.client_id) {
+        const client = clients.find(c => 
+          c.client_id === order.client_id || 
+          c.id === order.client_id
+        );
+        if (client) {
+          clientData = {
+            client_id: client.client_id,
+            client_name: client.company || client.name,
+            client_company: client.company,
+            client_email: client.email,
+            client_phone: client.phone,
+            client_address: client.address,
+            client_city: client.city,
+            client_postal_code: client.postal_code,
+            client_county: client.county,
+            client_reg_number: client.reg_number,
+            client_vat_number: client.vat_number,
+          };
+        }
+      }
+      
+      // Fallback to order data if no client found
+      if (!clientData.client_name) {
+        clientData.client_name = order.client_name || order.customer_name;
+        clientData.client_id = order.client_id;
+      }
+      
       const invoiceData = {
         order_id: order.order_id,
-        client_id: order.client_id,
-        client_name: order.client_name || order.customer_name,
-        items: order.items || [{
-          description: order.item_name || 'Print Job',
-          quantity: order.quantity || 1,
-          unit_price: order.quote?.subtotal || order.total_price || 0,
-          unit: 'tk'
-        }],
+        ...clientData,
+        // Store client object with all contact info for PDF generation
+        client: {
+          name: clientData.client_name || clientData.client_company || '',
+          company: clientData.client_company || '',
+          email: clientData.client_email || order.client_email || '',
+          phone: clientData.client_phone || order.client_phone || '',
+          address: clientData.client_address || '',
+          city: clientData.client_city || '',
+          postal_code: clientData.client_postal_code || '',
+          county: clientData.client_county || '',
+          reg_number: clientData.client_reg_number || '',
+          vat_number: clientData.client_vat_number || '',
+        },
+        items: (() => {
+          const items = [];
+          
+          // Main print job item - calculate base price (without modeling)
+          const quote = order.quote || {};
+          const modelingFee = parseFloat(quote.modeling_fee) || 0;
+          const baseSubtotal = (parseFloat(quote.subtotal) || order.total_price || 0) - modelingFee;
+          
+          // Build description with material info
+          const materialInfo = order.material_type ? ` (${order.material_type}` : '';
+          const weightInfo = order.material_weight_g ? `, ${Math.round(order.material_weight_g)}g)` : (materialInfo ? ')' : '');
+          const itemDesc = (order.item_name || 'Print Job') + materialInfo + weightInfo;
+          
+          items.push({
+            description: itemDesc,
+            quantity: order.quantity || 1,
+            unit_price: baseSubtotal / (order.quantity || 1),
+            unit: 'tk'
+          });
+          
+          // Add modeling fee as separate line item if present
+          if (modelingFee > 0) {
+            const hours = quote.modeling_hours || 1;
+            items.push({
+              description: `3D Modelleerimine (${hours}h)`,
+              quantity: 1,
+              unit_price: modelingFee,
+              unit: 'h'
+            });
+          }
+          
+          return items;
+        })(),
         subtotal: order.quote?.subtotal || order.total_price || 0,
         vat_rate: 0.24,
         total: order.quote?.total || order.total_price || 0,
         notes: order.notes || ''
       };
       
+      console.log('[Invoice] Creating with data:', JSON.stringify(invoiceData, null, 2));
+      console.log('[Invoice] Items being sent:', invoiceData.items);
       await api.createInvoice(invoiceData);
       toast.success(t('invoices.created') || 'Invoice created');
       setCreateModal(null);
@@ -194,7 +347,7 @@ const InvoiceManagement = () => {
     const invoicedOrderIds = new Set(invoices.map(inv => inv.order_id));
     return orders.filter(order => 
       !invoicedOrderIds.has(order.order_id) &&
-      (order.status === 'accepted' || order.status === 'queued' || 
+      (order.status === 'quoted' || order.status === 'accepted' || order.status === 'queued' || 
        order.status === 'printing' || order.status === 'ready' || 
        order.status === 'delivered' || order.status === 'completed')
     );
@@ -524,139 +677,199 @@ const InvoiceManagement = () => {
       )}
 
       {/* Invoice Details Modal */}
-      {detailsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70" onClick={() => setDetailsModal(null)} />
-          <div className="relative w-full max-w-2xl rounded-xl border overflow-hidden" style={{ backgroundColor: '#1e293b', borderColor: '#334155' }}>
-            {/* Header */}
-            <div className="p-6 border-b" style={{ borderColor: '#334155' }}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-bold text-white">{detailsModal.invoice_number}</h3>
-                  <p className="text-slate-400">{sanitizeText(detailsModal.client_name)}</p>
-                </div>
-                <span className={`px-3 py-1.5 rounded-full text-sm border ${getStatusColor(detailsModal)}`}>
-                  {getStatusLabel(detailsModal)}
-                </span>
-              </div>
-            </div>
-            
-            {/* Content */}
-            <div className="p-6 space-y-6">
-              {/* Dates */}
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <p className="text-sm text-slate-400">{t('invoices.invoiceDate') || 'Invoice Date'}</p>
-                  <p className="text-white font-medium">{formatDate(detailsModal.date || detailsModal.created_at)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-400">{t('invoices.dueDate') || 'Due Date'}</p>
-                  <p className="text-white font-medium">{formatDate(detailsModal.due_date)}</p>
-                </div>
-                {detailsModal.paid_at && (
+      {detailsModal && (() => {
+        // Get full client info for display
+        const clientInfo = findClient(detailsModal);
+        // ALWAYS recalculate totals with 24% VAT (stored values might be wrong)
+        const subtotal = detailsModal.subtotal || 0;
+        const vatAmount = subtotal * 0.24; // Always use 24% Estonian VAT
+        const calculatedTotal = subtotal + vatAmount;
+        // Check if stored values differ
+        const storedTotal = detailsModal.total || 0;
+        const hasMismatch = Math.abs(storedTotal - calculatedTotal) > 0.01;
+        
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70" onClick={() => setDetailsModal(null)} />
+            <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border" style={{ backgroundColor: '#1e293b', borderColor: '#334155' }}>
+              {/* Header */}
+              <div className="p-6 border-b sticky top-0 z-10" style={{ borderColor: '#334155', backgroundColor: '#1e293b' }}>
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-slate-400">{t('invoices.paidDate') || 'Paid Date'}</p>
-                    <p className="text-green-400 font-medium">{formatDate(detailsModal.paid_at)}</p>
+                    <h3 className="text-xl font-bold text-white">{detailsModal.invoice_number}</h3>
+                    <p className="text-slate-400">{sanitizeText(clientInfo?.company || clientInfo?.name || detailsModal.client_name)}</p>
+                  </div>
+                  <span className={`px-3 py-1.5 rounded-full text-sm border ${getStatusColor(detailsModal)}`}>
+                    {getStatusLabel(detailsModal)}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Content */}
+              <div className="p-6 space-y-6">
+                {/* Client Info + Dates Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Client Details */}
+                  <div className="p-4 rounded-lg" style={{ backgroundColor: '#0f172a' }}>
+                    <p className="text-sm text-slate-400 mb-2 font-medium">👤 {t('invoices.clientDetails') || 'Client Details'}</p>
+                    <div className="space-y-1">
+                      <p className="text-white font-medium">{clientInfo?.company || clientInfo?.name || detailsModal.client_name}</p>
+                      {clientInfo?.address && <p className="text-sm text-slate-300">{clientInfo.address}</p>}
+                      {(clientInfo?.city || clientInfo?.postal_code || clientInfo?.county) && (
+                        <p className="text-sm text-slate-300">
+                          {[clientInfo?.postal_code, clientInfo?.city, clientInfo?.county].filter(Boolean).join(', ')}
+                        </p>
+                      )}
+                      {clientInfo?.reg_number && (
+                        <p className="text-xs text-slate-400 mt-2">Rg-kood: {clientInfo.reg_number}</p>
+                      )}
+                      {clientInfo?.vat_number && (
+                        <p className="text-xs text-slate-400">KMKR: {clientInfo.vat_number}</p>
+                      )}
+                      {clientInfo?.email && (
+                        <p className="text-xs text-slate-500 mt-1">📧 {clientInfo.email}</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Dates */}
+                  <div className="p-4 rounded-lg" style={{ backgroundColor: '#0f172a' }}>
+                    <p className="text-sm text-slate-400 mb-2 font-medium">📅 {t('invoices.dates') || 'Dates'}</p>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">{t('invoices.invoiceDate') || 'Invoice Date'}</span>
+                        <span className="text-white">{formatDate(detailsModal.invoice_date || detailsModal.date || detailsModal.created_at)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">{t('invoices.dueDate') || 'Due Date'}</span>
+                        <span className="text-white">{formatDate(detailsModal.due_date)}</span>
+                      </div>
+                      {(detailsModal.paid_at || detailsModal.payment_date) && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">{t('invoices.paidDate') || 'Paid Date'}</span>
+                          <span className="text-green-400">{formatDate(detailsModal.paid_at || detailsModal.payment_date)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Items */}
+                {detailsModal.items && detailsModal.items.length > 0 && (
+                  <div>
+                    <p className="text-sm text-slate-400 mb-2 font-medium">📦 {t('invoices.items') || 'Items'}</p>
+                    <div className="rounded-lg overflow-hidden" style={{ backgroundColor: '#0f172a' }}>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b" style={{ borderColor: '#334155' }}>
+                            <th className="text-left p-3 text-slate-400">Kirjeldus</th>
+                            <th className="text-right p-3 text-slate-400">Kogus</th>
+                            <th className="text-right p-3 text-slate-400">Hind</th>
+                            <th className="text-right p-3 text-slate-400">Summa</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detailsModal.items.map((item, idx) => (
+                            <tr key={idx} className="border-b" style={{ borderColor: '#334155' }}>
+                              <td className="p-3 text-white">{item.description || item.name}</td>
+                              <td className="p-3 text-right text-slate-300">{item.quantity || 1}</td>
+                              <td className="p-3 text-right text-slate-300">{formatCurrency(item.unit_price)}</td>
+                              <td className="p-3 text-right text-white">{formatCurrency(item.subtotal || ((item.quantity || 1) * (item.unit_price || 0)))}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Totals */}
+                <div className="flex justify-end">
+                  <div className="w-72 p-4 rounded-lg" style={{ backgroundColor: '#0f172a' }}>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-slate-400">
+                        <span>Summa km-ta</span>
+                        <span>{formatCurrency(subtotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-400">
+                        <span>Käibemaks 24%</span>
+                        <span>{formatCurrency(vatAmount)}</span>
+                      </div>
+                      <div className="flex justify-between text-xl font-bold text-white pt-2 border-t" style={{ borderColor: '#334155' }}>
+                        <span>Kokku</span>
+                        <span>{formatCurrency(calculatedTotal)}</span>
+                      </div>
+                      {/* Show warning if stored total differs from calculated */}
+                      {hasMismatch && (
+                        <p className="text-xs text-yellow-400 mt-2">
+                          ⚠️ Vana summa (vale KM): {formatCurrency(storedTotal)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Payment Info */}
+                {(detailsModal.payment_method || detailsModal.payment_status === 'paid') && (
+                  <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
+                    <p className="text-green-400 font-medium mb-1">✅ {t('invoices.paymentReceived') || 'Payment Received'}</p>
+                    <p className="text-sm text-green-300">
+                      {detailsModal.payment_method && `${t('invoices.method') || 'Method'}: ${detailsModal.payment_method}`}
+                      {detailsModal.payment_reference && ` • Viide: ${detailsModal.payment_reference}`}
+                    </p>
                   </div>
                 )}
               </div>
               
-              {/* Items */}
-              {detailsModal.items && detailsModal.items.length > 0 && (
-                <div>
-                  <p className="text-sm text-slate-400 mb-2">{t('invoices.items') || 'Items'}</p>
-                  <div className="rounded-lg overflow-hidden" style={{ backgroundColor: '#0f172a' }}>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b" style={{ borderColor: '#334155' }}>
-                          <th className="text-left p-3 text-slate-400">{t('common.description') || 'Description'}</th>
-                          <th className="text-right p-3 text-slate-400">{t('common.qty') || 'Qty'}</th>
-                          <th className="text-right p-3 text-slate-400">{t('common.price') || 'Price'}</th>
-                          <th className="text-right p-3 text-slate-400">{t('common.total') || 'Total'}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {detailsModal.items.map((item, idx) => (
-                          <tr key={idx} className="border-b" style={{ borderColor: '#334155' }}>
-                            <td className="p-3 text-white">{item.description || item.name}</td>
-                            <td className="p-3 text-right text-slate-300">{item.quantity || 1}</td>
-                            <td className="p-3 text-right text-slate-300">{formatCurrency(item.unit_price)}</td>
-                            <td className="p-3 text-right text-white">{formatCurrency((item.quantity || 1) * (item.unit_price || 0))}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-              
-              {/* Totals */}
-              <div className="flex justify-end">
-                <div className="w-64 space-y-2">
-                  <div className="flex justify-between text-slate-400">
-                    <span>{t('invoices.subtotal') || 'Subtotal'}</span>
-                    <span>{formatCurrency(detailsModal.subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-400">
-                    <span>{t('invoices.vat') || 'VAT'} (24%)</span>
-                    <span>{formatCurrency(detailsModal.vat_amount || (detailsModal.subtotal * 0.24))}</span>
-                  </div>
-                  <div className="flex justify-between text-xl font-bold text-white pt-2 border-t" style={{ borderColor: '#334155' }}>
-                    <span>{t('common.total') || 'Total'}</span>
-                    <span>{formatCurrency(detailsModal.total)}</span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Payment Info */}
-              {detailsModal.payment_method && (
-                <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
-                  <p className="text-green-400 font-medium mb-1">{t('invoices.paymentReceived') || 'Payment Received'}</p>
-                  <p className="text-sm text-green-300">
-                    {t('invoices.method') || 'Method'}: {detailsModal.payment_method}
-                    {detailsModal.payment_reference && ` • ${t('invoices.ref') || 'Ref'}: ${detailsModal.payment_reference}`}
-                  </p>
-                </div>
-              )}
-            </div>
-            
-            {/* Footer */}
-            <div className="p-4 border-t flex justify-between" style={{ borderColor: '#334155' }}>
-              <button
-                onClick={() => setDetailsModal(null)}
-                className="px-4 py-2 rounded-lg border text-slate-300 hover:bg-slate-700 transition"
-                style={{ borderColor: '#334155' }}
-              >
-                {t('common.close') || 'Close'}
-              </button>
-              
-              <div className="flex gap-2">
-                {detailsModal.status !== 'paid' && (
+              {/* Footer */}
+              <div className="p-4 border-t flex justify-between sticky bottom-0" style={{ borderColor: '#334155', backgroundColor: '#1e293b' }}>
+                <button
+                  onClick={() => setDetailsModal(null)}
+                  className="px-4 py-2 rounded-lg border text-slate-300 hover:bg-slate-700 transition"
+                  style={{ borderColor: '#334155' }}
+                >
+                  {t('common.close') || 'Close'}
+                </button>
+                
+                <div className="flex gap-2">
+                  {detailsModal.status !== 'paid' && detailsModal.payment_status !== 'paid' && (
+                    <button
+                      onClick={() => {
+                        setDetailsModal(null);
+                        setPaymentModal(detailsModal);
+                      }}
+                      className="px-4 py-2 rounded-lg font-medium text-green-400 border border-green-500/30 hover:bg-green-500/20 transition"
+                    >
+                      💰 {t('invoices.markPaid') || 'Mark Paid'}
+                    </button>
+                  )}
                   <button
                     onClick={() => {
-                      setDetailsModal(null);
-                      setPaymentModal(detailsModal);
+                      openPdfPreview(detailsModal);
                     }}
-                    className="px-4 py-2 rounded-lg font-medium text-green-400 border border-green-500/30 hover:bg-green-500/20 transition"
+                    className="px-4 py-2 rounded-lg font-medium text-white transition"
+                    style={{ background: 'linear-gradient(135deg, #a855f7 0%, #06b6d4 100%)' }}
                   >
-                    💰 {t('invoices.markPaid') || 'Mark Paid'}
+                    📥 {t('invoices.download') || 'Download'}
                   </button>
-                )}
-                <button
-                  onClick={() => {
-                    // TODO: Export/Download invoice
-                    toast.info('Export coming soon');
-                  }}
-                  className="px-4 py-2 rounded-lg font-medium text-white transition"
-                  style={{ background: 'linear-gradient(135deg, #a855f7 0%, #06b6d4 100%)' }}
-                >
-                  📥 {t('invoices.download') || 'Download'}
-                </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
+      {/* PDF Preview Modal */}
+      <InvoicePDFPreview
+        invoice={pdfPreviewModal}
+        client={pdfPreviewClient}
+        company={DEFAULT_COMPANY}
+        isOpen={!!pdfPreviewModal}
+        onClose={() => {
+          setPdfPreviewModal(null);
+          setPdfPreviewClient(null);
+        }}
+      />
     </div>
   );
 };

@@ -21,6 +21,11 @@ const ClientList = () => {
     phone: '',
     company: '',
     address: '',
+    city: '',
+    postal_code: '',
+    county: '',
+    reg_number: '',
+    vat_number: '',
     pricing_tier: 'standard',
     discount_percentage: 0,
     notes: ''
@@ -68,6 +73,11 @@ const ClientList = () => {
       phone: '',
       company: '',
       address: '',
+      city: '',
+      postal_code: '',
+      county: '',
+      reg_number: '',
+      vat_number: '',
       pricing_tier: 'standard',
       discount_percentage: 0,
       notes: ''
@@ -84,6 +94,11 @@ const ClientList = () => {
       phone: client.phone || '',
       company: client.company || '',
       address: client.address || '',
+      city: client.city || '',
+      postal_code: client.postal_code || '',
+      county: client.county || '',
+      reg_number: client.reg_number || '',
+      vat_number: client.vat_number || '',
       pricing_tier: client.pricing_tier || 'standard',
       discount_percentage: client.discount_percentage || 0,
       notes: client.notes || ''
@@ -226,6 +241,47 @@ const ClientList = () => {
               value={formData.address}
               onChange={(e) => setFormData({...formData, address: e.target.value})}
               className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500 col-span-2" 
+            />
+            
+            {/* Estonian business address fields */}
+            <input 
+              type="text" 
+              placeholder={t('clients.city') || 'Linn'} 
+              value={formData.city}
+              onChange={(e) => setFormData({...formData, city: e.target.value})}
+              className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500" 
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input 
+                type="text" 
+                placeholder={t('clients.postalCode') || 'Postiindeks'} 
+                value={formData.postal_code}
+                onChange={(e) => setFormData({...formData, postal_code: e.target.value})}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500" 
+              />
+              <input 
+                type="text" 
+                placeholder={t('clients.county') || 'Maakond'} 
+                value={formData.county}
+                onChange={(e) => setFormData({...formData, county: e.target.value})}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500" 
+              />
+            </div>
+            
+            {/* Estonian business registration fields */}
+            <input 
+              type="text" 
+              placeholder={t('clients.regNumber') || 'Rg-kood'} 
+              value={formData.reg_number}
+              onChange={(e) => setFormData({...formData, reg_number: e.target.value})}
+              className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500" 
+            />
+            <input 
+              type="text" 
+              placeholder={t('clients.vatNumber') || 'KMKR nr (nt EE123456789)'} 
+              value={formData.vat_number}
+              onChange={(e) => setFormData({...formData, vat_number: e.target.value})}
+              className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500" 
             />
             <select 
               value={formData.pricing_tier}

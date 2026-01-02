@@ -667,6 +667,147 @@ export const userHasAllPermissions = (user, permissions) => {
   return permissions.every(p => userHasPermission(user, p));
 };
 
+// ============================================================================
+// TAB VISIBILITY (for App.js tab filtering - backward compatibility)
+// ============================================================================
+
+/**
+ * Maps fine-grained permissions to tab visibility.
+ * This bridges the new permission system with the legacy tab-based UI.
+ * 
+ * IMPORTANT: This is the SINGLE SOURCE OF TRUTH for tab visibility.
+ * App.js should import and use getTabVisibility() instead of ROLE_PERMISSIONS.
+ */
+const TAB_PERMISSION_MAPPING = {
+  home: [], // Always visible
+  business: ['business.orders.view', 'business.quotes.view', 'business.clients.view'],
+  printers: ['production.printers.view'],
+  production: ['production.jobs.view', 'production.queue.view'],
+  calendar: ['production.maintenance.view', 'team.shifts.view'],
+  files: ['files.view'],
+  inventory: ['inventory.materials.view', 'inventory.supplies.view'],
+  reports: ['analytics.reports.view', 'analytics.financial.view'],
+  ai: ['ai.generation.view', 'ai.training.view'],
+  marketing: ['business.clients.view'], // Marketing needs client access
+  config: ['settings.general.view'],
+  manageUsers: ['team.users.create', 'team.users.roles'],
+};
+
+/**
+ * Get tab visibility for a user based on their permissions.
+ * Returns object matching legacy ROLE_PERMISSIONS format for backward compatibility.
+ * 
+ * @param {Object} user - User object with role and custom_permissions
+ * @returns {Object} Tab visibility object { home: true, business: false, ... }
+ */
+export const getTabVisibility = (user) => {
+  const visibility = {};
+  
+  Object.entries(TAB_PERMISSION_MAPPING).forEach(([tab, requiredPermissions]) => {
+    if (requiredPermissions.length === 0) {
+      // Tab with no required permissions is always visible
+      visibility[tab] = true;
+    } else {
+      // Tab visible if user has ANY of the required permissions
+      visibility[tab] = userHasAnyPermission(user, requiredPermissions);
+    }
+  });
+  
+  return visibility;
+};
+
+/**
+ * Check if a specific tab should be visible for a user.
+ * 
+ * @param {Object} user - User object
+ * @param {string} tabId - Tab identifier (home, business, printers, etc.)
+ * @returns {boolean}
+ */
+export const isTabVisible = (user, tabId) => {
+  const requiredPermissions = TAB_PERMISSION_MAPPING[tabId];
+  if (!requiredPermissions || requiredPermissions.length === 0) {
+    return true;
+  }
+  return userHasAnyPermission(user, requiredPermissions);
+};
+
+// ============================================================================
+// FINANCIAL DATA VISIBILITY (worker role restrictions)
+// ============================================================================
+
+/**
+ * Fields that should be hidden from workers/non-financial roles.
+ * Use this to filter sensitive data before displaying.
+ */
+export const SENSITIVE_FINANCIAL_FIELDS = [
+  'profit',
+  'margin',
+  'profit_margin',
+  'cost',
+  'material_cost',
+  'labor_cost',
+  'overhead_cost',
+  'total_cost',
+  'unit_cost',
+  'hourly_rate',
+  'discount_amount',
+  'discount_percent',
+  'revenue',
+  'net_revenue',
+  'gross_profit',
+];
+
+/**
+ * Check if user can view financial/sensitive data.
+ * 
+ * @param {Object} user - User object
+ * @returns {boolean}
+ */
+export const canViewFinancials = (user) => {
+  return userHasAnyPermission(user, [
+    'analytics.financial.view',
+    'analytics.financial.detailed',
+    'business.clients.pricing',
+  ]);
+};
+
+/**
+ * Filter sensitive financial fields from an object.
+ * Use this when displaying data to workers.
+ * 
+ * @param {Object} data - Data object to filter
+ * @param {Object} user - User object
+ * @returns {Object} Filtered data
+ */
+export const filterFinancialData = (data, user) => {
+  if (!data || canViewFinancials(user)) {
+    return data;
+  }
+  
+  const filtered = { ...data };
+  SENSITIVE_FINANCIAL_FIELDS.forEach(field => {
+    if (field in filtered) {
+      delete filtered[field];
+    }
+  });
+  
+  return filtered;
+};
+
+/**
+ * Filter an array of objects, removing sensitive financial fields.
+ * 
+ * @param {Array} items - Array of data objects
+ * @param {Object} user - User object
+ * @returns {Array} Filtered array
+ */
+export const filterFinancialDataArray = (items, user) => {
+  if (!Array.isArray(items) || canViewFinancials(user)) {
+    return items;
+  }
+  return items.map(item => filterFinancialData(item, user));
+};
+
 export default {
   PERMISSIONS,
   ROLES,
@@ -682,4 +823,13 @@ export default {
   userHasPermission,
   userHasAnyPermission,
   userHasAllPermissions,
+  // Tab visibility (backward compatibility with App.js)
+  TAB_PERMISSION_MAPPING,
+  getTabVisibility,
+  isTabVisible,
+  // Financial data filtering
+  SENSITIVE_FINANCIAL_FIELDS,
+  canViewFinancials,
+  filterFinancialData,
+  filterFinancialDataArray,
 };

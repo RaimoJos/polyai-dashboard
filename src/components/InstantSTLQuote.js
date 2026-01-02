@@ -335,7 +335,7 @@ function SmartRecommendations({ purpose, onApply }) {
 }
 
 // ============================================================
-// ORDER CREATION MODAL
+// ORDER CREATION MODAL - ENHANCED with Business/Individual
 // ============================================================
 function CreateOrderModal({ 
   isOpen, 
@@ -356,11 +356,21 @@ function CreateOrderModal({
   const [clients, setClients] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [isNewClient, setIsNewClient] = useState(false);
+  const [loadingClients, setLoadingClients] = useState(false);
+  const [orderNotes, setOrderNotes] = useState('');
+  
+  // New client fields
+  const [clientType, setClientType] = useState('individual'); // 'individual' or 'business'
   const [clientName, setClientName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [clientPhone, setClientPhone] = useState('');
-  const [orderNotes, setOrderNotes] = useState('');
-  const [loadingClients, setLoadingClients] = useState(false);
+  // Business-specific fields
+  const [companyName, setCompanyName] = useState('');
+  const [regNumber, setRegNumber] = useState('');
+  const [vatNumber, setVatNumber] = useState('');
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [postalCode, setPostalCode] = useState('');
 
   // Load clients when modal opens
   useEffect(() => {
@@ -369,42 +379,106 @@ function CreateOrderModal({
       api.getClients()
         .then(response => {
           const clientList = Array.isArray(response) ? response : (response?.data || response?.clients || []);
-          setClients(clientList);
+          // Filter to active clients only
+          const activeClients = clientList.filter(c => c.status !== 'deleted');
+          setClients(activeClients);
         })
         .catch(err => console.error('Failed to load clients:', err))
         .finally(() => setLoadingClients(false));
     }
   }, [isOpen]);
 
+  // Reset form when switching client type
+  useEffect(() => {
+    if (isNewClient) {
+      setClientName('');
+      setClientEmail('');
+      setClientPhone('');
+      setCompanyName('');
+      setRegNumber('');
+      setVatNumber('');
+      setAddress('');
+      setCity('');
+      setPostalCode('');
+    }
+  }, [isNewClient, clientType]);
+
   const handleSubmit = () => {
-    if (!selectedClientId && !clientName) {
-      toast.error('Palun vali klient või sisesta uue kliendi nimi');
+    // Validation
+    if (!isNewClient && !selectedClientId) {
+      toast.error('Palun vali klient');
       return;
+    }
+    if (isNewClient) {
+      if (clientType === 'business' && !companyName) {
+        toast.error('Palun sisesta ettevõtte nimi');
+        return;
+      }
+      if (clientType === 'individual' && !clientName) {
+        toast.error('Palun sisesta kliendi nimi');
+        return;
+      }
     }
     
     const selectedClient = clients.find(c => c.id === selectedClientId || c.client_id === selectedClientId);
     
-    onSubmit({
+    // Build client data for submission
+    const clientData = {
       clientId: selectedClientId,
-      clientName: isNewClient ? clientName : (selectedClient?.name || selectedClient?.company_name || 'Walk-in'),
-      clientEmail: isNewClient ? clientEmail : (selectedClient?.email || ''),
-      clientPhone: isNewClient ? clientPhone : (selectedClient?.phone || ''),
       isNewClient,
       orderNotes,
-    });
+    };
+    
+    if (isNewClient) {
+      clientData.clientType = clientType;
+      if (clientType === 'business') {
+        clientData.clientName = companyName;
+        clientData.companyName = companyName;
+        clientData.regNumber = regNumber;
+        clientData.vatNumber = vatNumber;
+        clientData.address = address;
+        clientData.city = city;
+        clientData.postalCode = postalCode;
+      } else {
+        clientData.clientName = clientName;
+      }
+      clientData.clientEmail = clientEmail;
+      clientData.clientPhone = clientPhone;
+    } else {
+      clientData.clientName = selectedClient?.name || selectedClient?.company_name || selectedClient?.company || 'Walk-in';
+      clientData.clientEmail = selectedClient?.email || '';
+      clientData.clientPhone = selectedClient?.phone || '';
+      clientData.clientType = selectedClient?.type || 'individual';
+      clientData.companyName = selectedClient?.company_name || selectedClient?.company || '';
+      clientData.regNumber = selectedClient?.reg_number || selectedClient?.registration_number || '';
+      clientData.vatNumber = selectedClient?.vat_number || '';
+      clientData.address = selectedClient?.address || '';
+      clientData.city = selectedClient?.city || '';
+      clientData.postalCode = selectedClient?.postal_code || '';
+    }
+    
+    onSubmit(clientData);
   };
 
   if (!isOpen) return null;
+
+  // Get quality label
+  const qualityLabel = QUALITY_PRESETS.find(q => q.id === quality)?.name || quality;
+  
+  // Get dimensions string
+  const dimsStr = stlGeometry?.dimensions_mm 
+    ? `${stlGeometry.dimensions_mm.width?.toFixed(0)}×${stlGeometry.dimensions_mm.depth?.toFixed(0)}×${stlGeometry.dimensions_mm.height?.toFixed(0)}mm`
+    : '';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       
-      <div className="relative w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden"
+      <div className="relative w-full max-w-2xl max-h-[90vh] rounded-2xl border shadow-2xl overflow-hidden flex flex-col"
            style={{ backgroundColor: '#0f172a', borderColor: '#334155' }}>
         
         {/* Header */}
-        <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+        <div className="p-4 border-b border-slate-700 flex items-center justify-between flex-shrink-0">
           <h3 className="text-lg font-bold text-white">📝 Loo tellimus</h3>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -413,111 +487,312 @@ function CreateOrderModal({
           </button>
         </div>
 
-        {/* Order Summary */}
-        <div className="p-4 bg-slate-800/50 border-b border-slate-700">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-lg bg-slate-700 flex items-center justify-center text-2xl">
-              📁
-            </div>
-            <div className="flex-1">
-              <p className="text-white font-medium truncate">{selectedFile?.name}</p>
-              <div className="flex flex-wrap gap-2 mt-1">
-                <span className="px-2 py-0.5 rounded text-xs bg-purple-500/20 text-purple-400">{material}</span>
-                <span className="px-2 py-0.5 rounded text-xs bg-cyan-500/20 text-cyan-400">{infill}% infill</span>
-                <span className="px-2 py-0.5 rounded text-xs bg-slate-600 text-slate-300">{pricing?.weight_g}g</span>
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Order Summary - Full Details */}
+          <div className="p-4 bg-slate-800/50 border-b border-slate-700">
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 rounded-lg bg-slate-700 flex items-center justify-center text-2xl flex-shrink-0">
+                📁
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-medium truncate">{selectedFile?.name}</p>
+                <p className="text-slate-400 text-xs mt-0.5">{dimsStr} • {stlGeometry?.volume_cm3} cm³</p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-2xl font-bold text-cyan-400">€{pricing?.grand_total}</p>
+                <p className="text-xs text-slate-500">koos KM 24%</p>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-cyan-400">€{pricing?.grand_total}</p>
-              <p className="text-xs text-slate-500">koos KM</p>
+            
+            {/* Detailed breakdown */}
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="p-2 rounded-lg bg-slate-700/50">
+                <p className="text-xs text-slate-500">Materjal</p>
+                <p className="text-sm text-white font-medium">{material}</p>
+              </div>
+              <div className="p-2 rounded-lg bg-slate-700/50">
+                <p className="text-xs text-slate-500">Värv</p>
+                <p className="text-sm text-white font-medium capitalize">{color}</p>
+              </div>
+              <div className="p-2 rounded-lg bg-slate-700/50">
+                <p className="text-xs text-slate-500">Kvaliteet</p>
+                <p className="text-sm text-white font-medium">{qualityLabel}</p>
+              </div>
+              <div className="p-2 rounded-lg bg-slate-700/50">
+                <p className="text-xs text-slate-500">Kogus</p>
+                <p className="text-sm text-white font-medium">{pricing?.quantity || 1} tk</p>
+              </div>
+              <div className="p-2 rounded-lg bg-slate-700/50">
+                <p className="text-xs text-slate-500">Täidis</p>
+                <p className="text-sm text-white font-medium">{infill}%</p>
+              </div>
+              <div className="p-2 rounded-lg bg-slate-700/50">
+                <p className="text-xs text-slate-500">Seinad</p>
+                <p className="text-sm text-white font-medium">{walls}</p>
+              </div>
+              <div className="p-2 rounded-lg bg-slate-700/50">
+                <p className="text-xs text-slate-500">Kaal</p>
+                <p className="text-sm text-white font-medium">{pricing?.weight_g}g</p>
+              </div>
+              <div className="p-2 rounded-lg bg-slate-700/50">
+                <p className="text-xs text-slate-500">Aeg</p>
+                <p className="text-sm text-white font-medium">{pricing?.print_time_formatted}</p>
+              </div>
+            </div>
+            
+            {/* Price breakdown */}
+            <div className="mt-3 p-3 rounded-lg bg-slate-900/50 text-xs space-y-1">
+              <div className="flex justify-between text-slate-400">
+                <span>Ühiku hind × {pricing?.quantity || 1}</span>
+                <span>€{(parseFloat(pricing?.unit_price || 0) * (pricing?.quantity || 1)).toFixed(2)}</span>
+              </div>
+              {parseFloat(pricing?.discount_amount) > 0 && (
+                <div className="flex justify-between text-green-400">
+                  <span>Soodustus -{pricing?.discount_percent}%</span>
+                  <span>-€{pricing?.discount_amount}</span>
+                </div>
+              )}
+              {pricing?.rush_multiplier > 1 && (
+                <div className="flex justify-between text-orange-400">
+                  <span>{pricing?.rush_name}</span>
+                  <span>+{Math.round((pricing?.rush_multiplier - 1) * 100)}%</span>
+                </div>
+              )}
+              {parseFloat(pricing?.delivery_fee) > 0 && (
+                <div className="flex justify-between text-slate-400">
+                  <span>{pricing?.delivery_name}</span>
+                  <span>€{pricing?.delivery_fee}</span>
+                </div>
+              )}
+              {parseFloat(pricing?.modeling_fee) > 0 && (
+                <div className="flex justify-between text-orange-400">
+                  <span>🎨 3D Modelleerimine ({pricing?.modeling_hours}h)</span>
+                  <span>€{pricing?.modeling_fee}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-slate-500 pt-1 border-t border-slate-700">
+                <span>ilma KM</span>
+                <span>€{pricing?.subtotal}</span>
+              </div>
+              <div className="flex justify-between text-slate-500">
+                <span>KM 24%</span>
+                <span>€{pricing?.vat}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Client Selection */}
-        <div className="p-4 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-white mb-2">👤 Klient</label>
-            
-            <div className="flex items-center gap-3 mb-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  checked={!isNewClient}
-                  onChange={() => setIsNewClient(false)}
-                  className="text-purple-500"
-                />
-                <span className="text-sm text-slate-300">Olemasolev</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  checked={isNewClient}
-                  onChange={() => setIsNewClient(true)}
-                  className="text-purple-500"
-                />
-                <span className="text-sm text-slate-300">Uus klient</span>
-              </label>
+          {/* Client Selection */}
+          <div className="p-4 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-white mb-2">👤 Klient</label>
+              
+              {/* Existing vs New toggle */}
+              <div className="flex items-center gap-4 mb-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={!isNewClient}
+                    onChange={() => setIsNewClient(false)}
+                    className="text-purple-500 accent-purple-500"
+                  />
+                  <span className="text-sm text-slate-300">Olemasolev klient</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={isNewClient}
+                    onChange={() => setIsNewClient(true)}
+                    className="text-purple-500 accent-purple-500"
+                  />
+                  <span className="text-sm text-slate-300">Uus klient</span>
+                </label>
+              </div>
+
+              {!isNewClient ? (
+                /* Existing client dropdown */
+                <select
+                  value={selectedClientId}
+                  onChange={(e) => setSelectedClientId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 focus:border-purple-500 focus:outline-none"
+                  disabled={loadingClients}
+                >
+                  <option value="">-- Vali klient --</option>
+                  {clients.map(client => {
+                    const displayName = client.company_name || client.company || client.name;
+                    const clientTypeBadge = (client.type === 'business' || client.company_name) ? '🏢' : '👤';
+                    return (
+                      <option key={client.id || client.client_id} value={client.id || client.client_id}>
+                        {clientTypeBadge} {displayName} {client.email && `(${client.email})`}
+                      </option>
+                    );
+                  })}
+                </select>
+              ) : (
+                /* New client form */
+                <div className="space-y-3">
+                  {/* Client type toggle */}
+                  <div className="flex rounded-lg overflow-hidden border border-slate-600">
+                    <button
+                      type="button"
+                      onClick={() => setClientType('individual')}
+                      className={`flex-1 px-4 py-2.5 text-sm font-medium transition ${
+                        clientType === 'individual'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >
+                      👤 Eraisik
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setClientType('business')}
+                      className={`flex-1 px-4 py-2.5 text-sm font-medium transition ${
+                        clientType === 'business'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >
+                      🏢 Ettevõte
+                    </button>
+                  </div>
+
+                  {clientType === 'individual' ? (
+                    /* Individual client fields */
+                    <>
+                      <input
+                        type="text"
+                        value={clientName}
+                        onChange={(e) => setClientName(e.target.value)}
+                        placeholder="Nimi *"
+                        className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 focus:border-purple-500 focus:outline-none"
+                      />
+                      <div className="grid grid-cols-2 gap-3">
+                        <input
+                          type="email"
+                          value={clientEmail}
+                          onChange={(e) => setClientEmail(e.target.value)}
+                          placeholder="Email"
+                          className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 focus:border-purple-500 focus:outline-none"
+                        />
+                        <input
+                          type="tel"
+                          value={clientPhone}
+                          onChange={(e) => setClientPhone(e.target.value)}
+                          placeholder="Telefon"
+                          className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 focus:border-purple-500 focus:outline-none"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    /* Business client fields */
+                    <>
+                      <input
+                        type="text"
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        placeholder="Ettevõtte nimi *"
+                        className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 focus:border-purple-500 focus:outline-none"
+                      />
+                      <div className="grid grid-cols-2 gap-3">
+                        <input
+                          type="text"
+                          value={regNumber}
+                          onChange={(e) => setRegNumber(e.target.value)}
+                          placeholder="Reg. kood (nt 12345678)"
+                          className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 focus:border-purple-500 focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          value={vatNumber}
+                          onChange={(e) => setVatNumber(e.target.value)}
+                          placeholder="KMKR (nt EE123456789)"
+                          className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 focus:border-purple-500 focus:outline-none"
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="Aadress"
+                        className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 focus:border-purple-500 focus:outline-none"
+                      />
+                      <div className="grid grid-cols-2 gap-3">
+                        <input
+                          type="text"
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          placeholder="Linn"
+                          className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 focus:border-purple-500 focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          value={postalCode}
+                          onChange={(e) => setPostalCode(e.target.value)}
+                          placeholder="Postiindeks"
+                          className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 focus:border-purple-500 focus:outline-none"
+                        />
+                      </div>
+                      <p className="text-xs text-slate-500">Kontaktisik:</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <input
+                          type="text"
+                          value={clientName}
+                          onChange={(e) => setClientName(e.target.value)}
+                          placeholder="Kontaktisiku nimi"
+                          className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 focus:border-purple-500 focus:outline-none"
+                        />
+                        <input
+                          type="email"
+                          value={clientEmail}
+                          onChange={(e) => setClientEmail(e.target.value)}
+                          placeholder="Email"
+                          className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 focus:border-purple-500 focus:outline-none"
+                        />
+                        <input
+                          type="tel"
+                          value={clientPhone}
+                          onChange={(e) => setClientPhone(e.target.value)}
+                          placeholder="Telefon"
+                          className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 focus:border-purple-500 focus:outline-none"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
-            {!isNewClient ? (
-              <select
-                value={selectedClientId}
-                onChange={(e) => setSelectedClientId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600"
-                disabled={loadingClients}
-              >
-                <option value="">-- Vali klient --</option>
-                {clients.map(client => (
-                  <option key={client.id || client.client_id} value={client.id || client.client_id}>
-                    {client.name || client.company_name} {client.email && `(${client.email})`}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  placeholder="Kliendi nimi *"
-                  className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600"
-                />
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="email"
-                    value={clientEmail}
-                    onChange={(e) => setClientEmail(e.target.value)}
-                    placeholder="Email"
-                    className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600"
-                  />
-                  <input
-                    type="tel"
-                    value={clientPhone}
-                    onChange={(e) => setClientPhone(e.target.value)}
-                    placeholder="Telefon"
-                    className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600"
-                  />
+            {/* Notes */}
+            <div>
+              <label className="block text-sm font-medium text-white mb-2">📝 Märkused</label>
+              <textarea
+                value={orderNotes}
+                onChange={(e) => setOrderNotes(e.target.value)}
+                placeholder="Lisainfo tellimuse kohta..."
+                rows={2}
+                className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 resize-none focus:border-purple-500 focus:outline-none"
+              />
+            </div>
+            
+            {/* Estimated delivery */}
+            <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-cyan-400">📅 Eeldatav valmimise aeg</p>
+                  <p className="text-cyan-300 font-medium">{pricing?.estimated_date}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-slate-500">Tarne</p>
+                  <p className="text-sm text-white">{pricing?.delivery_name}</p>
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className="block text-sm font-medium text-white mb-2">📝 Märkused</label>
-            <textarea
-              value={orderNotes}
-              onChange={(e) => setOrderNotes(e.target.value)}
-              placeholder="Lisainfo tellimuse kohta..."
-              rows={2}
-              className="w-full px-3 py-2.5 rounded-lg text-white bg-slate-700 border border-slate-600 resize-none"
-            />
+            </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-700 flex gap-3">
+        <div className="p-4 border-t border-slate-700 flex gap-3 flex-shrink-0">
           <button
             onClick={onClose}
             className="flex-1 py-2.5 rounded-lg text-slate-300 bg-slate-700 hover:bg-slate-600 transition"
@@ -527,10 +802,17 @@ function CreateOrderModal({
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="flex-1 py-2.5 rounded-lg text-white font-medium disabled:opacity-50"
+            className="flex-1 py-2.5 rounded-lg text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
             style={{ background: 'linear-gradient(135deg, #a855f7 0%, #06b6d4 100%)' }}
           >
-            {loading ? '⏳ Loome...' : '✅ Kinnita tellimus'}
+            {loading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Loome...
+              </>
+            ) : (
+              <>✅ Kinnita tellimus</>
+            )}
           </button>
         </div>
       </div>
@@ -575,6 +857,11 @@ function InstantSTLQuote({ onOrderCreate, currentUser }) {
   const [infill, setInfill] = useState(20);
   const [walls, setWalls] = useState(3);
   const [infillPattern, setInfillPattern] = useState('grid');
+  
+  // Additional services (3D modeling, etc.)
+  const [includeModeling, setIncludeModeling] = useState(false);
+  const [modelingHours, setModelingHours] = useState(1);
+  const MODELING_HOURLY_RATE = 35; // €35/h for 3D modeling
   
   // Check slicer status on mount
   useEffect(() => {
@@ -736,13 +1023,13 @@ function InstantSTLQuote({ onOrderCreate, currentUser }) {
       // Fallback to calculated estimates
       estimateSource = 'calculated';
       
-      // Weight calculation
-      const shellThickness = walls * 0.4;
-      const totalVolume = vol;
-      const shellVolume = totalVolume * 0.25 * (walls / 3);
-      const infillVolume = totalVolume * 0.75 * (infill / 100);
-      const effectiveVolume = shellVolume + infillVolume;
-      weight_g = effectiveVolume * matConfig.density;
+      // Weight calculation - more realistic approach
+      // Shell contributes ~15-20% of volume regardless of size
+      // Interior filled at infill percentage
+      const shellContribution = 0.15 + (walls - 2) * 0.03; // Base 15% + 3% per extra wall
+      const infillContribution = (1 - shellContribution) * (infill / 100);
+      const effectiveFillRatio = Math.min(1, shellContribution + infillContribution);
+      weight_g = vol * effectiveFillRatio * matConfig.density;
       
       // Print time
       const layerHeight = qualityConfig.layerHeight;
@@ -780,7 +1067,11 @@ function InstantSTLQuote({ onOrderCreate, currentUser }) {
     
     const afterRush = subtotalAfterDiscount * rushConfig.multiplier;
     const deliveryFee = deliveryConfig.price;
-    const subtotalBeforeVat = afterRush + deliveryFee;
+    
+    // Additional services (modeling fee)
+    const modelingFee = includeModeling ? (modelingHours * MODELING_HOURLY_RATE) : 0;
+    
+    const subtotalBeforeVat = afterRush + deliveryFee + modelingFee;
     
     const vat = subtotalBeforeVat * 0.24;
     const grandTotal = subtotalBeforeVat + vat;
@@ -796,6 +1087,7 @@ function InstantSTLQuote({ onOrderCreate, currentUser }) {
         ? `${Math.floor(printTimeHours)}h ${Math.round((printTimeHours % 1) * 60)}m`
         : `${Math.round(printTimeHours * 60)}m`,
       price_per_gram: matConfig.pricePerGram.toFixed(2),
+      material_cost: (weight_g * matConfig.pricePerGram).toFixed(2),
       setup_fee: setupFee.toFixed(2),
       base_price: basePrice.toFixed(2),
       unit_price: unitPrice.toFixed(2),
@@ -806,6 +1098,9 @@ function InstantSTLQuote({ onOrderCreate, currentUser }) {
       rush_name: rushConfig.name,
       delivery_name: deliveryConfig.name,
       delivery_fee: deliveryFee.toFixed(2),
+      modeling_fee: modelingFee.toFixed(2),
+      modeling_hours: includeModeling ? modelingHours : 0,
+      includes_modeling: includeModeling,
       subtotal: subtotalBeforeVat.toFixed(2),
       vat: vat.toFixed(2),
       grand_total: grandTotal.toFixed(2),
@@ -813,7 +1108,7 @@ function InstantSTLQuote({ onOrderCreate, currentUser }) {
       estimate_source: estimateSource,
       layer_count: slicerEstimate?.layer_count || null,
     };
-  }, [stlGeometry, material, quality, infill, walls, infillPattern, quantity, rush, delivery, slicerEstimate]);
+  }, [stlGeometry, material, quality, infill, walls, infillPattern, quantity, rush, delivery, slicerEstimate, includeModeling, modelingHours, MODELING_HOURLY_RATE]);
 
   // Purpose detection
   const detectPurpose = useCallback((geometry, filename) => {
@@ -1091,13 +1386,25 @@ function InstantSTLQuote({ onOrderCreate, currentUser }) {
       let clientId = clientData.clientId;
       if (clientData.isNewClient && clientData.clientName) {
         try {
-          const newClient = await api.createClient({
+          const newClientPayload = {
             name: clientData.clientName,
             email: clientData.clientEmail,
             phone: clientData.clientPhone,
-            type: 'individual',
+            type: clientData.clientType || 'individual',
             source: 'instant_quote',
-          });
+          };
+          
+          // Add business fields if it's a business client
+          if (clientData.clientType === 'business') {
+            newClientPayload.company_name = clientData.companyName;
+            newClientPayload.reg_number = clientData.regNumber;
+            newClientPayload.vat_number = clientData.vatNumber;
+            newClientPayload.address = clientData.address;
+            newClientPayload.city = clientData.city;
+            newClientPayload.postal_code = clientData.postalCode;
+          }
+          
+          const newClient = await api.createClient(newClientPayload);
           clientId = newClient?.id || newClient?.client_id;
         } catch (clientErr) {
           console.warn('Failed to create client:', clientErr);
@@ -1115,12 +1422,17 @@ function InstantSTLQuote({ onOrderCreate, currentUser }) {
         delivery_fee: parseFloat(pricing.delivery_fee),
         rush_multiplier: pricing.rush_multiplier,
         estimate_source: pricing.estimate_source,
+        // Additional services
+        modeling_fee: parseFloat(pricing.modeling_fee) || 0,
+        modeling_hours: pricing.modeling_hours || 0,
+        includes_modeling: pricing.includes_modeling || false,
       };
       
       // Build order data
+      const modelingNote = pricing.includes_modeling ? ` + 3D modelleerimine ${pricing.modeling_hours}h` : '';
       const orderData = {
         item_name: selectedFile?.name?.replace('.stl', '') || 'STL Print Job',
-        description: `${material} ${color} - ${infill}% infill, ${walls} walls. ${clientData.orderNotes}`.trim(),
+        description: `${material} ${color} - ${infill}% infill, ${walls} walls${modelingNote}. ${clientData.orderNotes}`.trim(),
         material_type: material,
         material_weight_g: parseFloat(pricing.weight_g) || 0,
         print_time_hours: pricing.print_time_hours || 0,
@@ -1518,6 +1830,59 @@ function InstantSTLQuote({ onOrderCreate, currentUser }) {
             </div>
           )}
 
+          {/* Additional Services - Modeling Fee */}
+          {stlGeometry && (
+            <div className="p-4 rounded-xl border border-orange-500/30 bg-gradient-to-br from-orange-500/10 to-amber-500/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">🎨</span>
+                  <div>
+                    <h4 className="text-sm font-medium text-white">3D Modelleerimine</h4>
+                    <p className="text-xs text-slate-400">Lisateenused (disain, muutmine, optimeerimine)</p>
+                  </div>
+                </div>
+                
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeModeling}
+                    onChange={(e) => setIncludeModeling(e.target.checked)}
+                    className="w-5 h-5 rounded text-orange-500 accent-orange-500"
+                  />
+                </label>
+              </div>
+              
+              {includeModeling && (
+                <div className="mt-4 p-3 rounded-lg bg-slate-800/50">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <label className="block text-xs text-slate-400 mb-1">Tunnid</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="0.5"
+                          max="100"
+                          step="0.5"
+                          value={modelingHours}
+                          onChange={(e) => setModelingHours(Math.max(0.5, parseFloat(e.target.value) || 0.5))}
+                          className="w-24 px-3 py-2 rounded-lg text-white text-sm bg-slate-700"
+                        />
+                        <span className="text-slate-400 text-sm">× €{MODELING_HOURLY_RATE}/h</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-slate-400">Summa</p>
+                      <p className="text-xl font-bold text-orange-400">€{(modelingHours * MODELING_HOURLY_RATE).toFixed(2)}</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2">
+                    💡 Sisaldab: mudeli loomine/muutmine, printimiseks optimeerimine, tugevdused
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Stats */}
           {stlGeometry && pricing && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1599,6 +1964,12 @@ function InstantSTLQuote({ onOrderCreate, currentUser }) {
                       <span className="text-slate-400">{pricing.delivery_name}</span>
                       <span className="text-white">{parseFloat(pricing.delivery_fee) === 0 ? 'TASUTA' : `€${pricing.delivery_fee}`}</span>
                     </div>
+                    {parseFloat(pricing.modeling_fee) > 0 && (
+                      <div className="flex justify-between mt-1 text-orange-400">
+                        <span>🎨 3D Modelleerimine ({pricing.modeling_hours}h)</span>
+                        <span>€{pricing.modeling_fee}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

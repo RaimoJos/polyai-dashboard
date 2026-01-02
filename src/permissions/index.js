@@ -56,6 +56,14 @@ export {
   userHasPermission,
   userHasAnyPermission,
   userHasAllPermissions,
+  // Tab visibility (backward compatibility)
+  getTabVisibility,
+  isTabVisible,
+  // Financial data filtering
+  SENSITIVE_FINANCIAL_FIELDS,
+  canViewFinancials,
+  filterFinancialData,
+  filterFinancialDataArray,
 } from './PermissionsConfig';
 
 // React context and hooks
@@ -67,10 +75,18 @@ export {
   useRole,
   useIsOwner,
   useIsAdmin,
+  // Financial data visibility
+  useCanViewFinancials,
+  useFilterFinancials,
+  // Tab visibility
+  useTabVisibility,
+  // Gate components
   PermissionGate,
   OwnerOnly,
   AdminOnly,
   AuthenticatedOnly,
+  FinancialsGate,
+  // HOCs
   withPermissions,
   withPermissionGate,
   PermissionDebug,

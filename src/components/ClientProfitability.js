@@ -13,6 +13,28 @@ function ClientProfitability() {
   const [sortBy, setSortBy] = useState('profit');
   const [selectedClient, setSelectedClient] = useState(null);
 
+  // Define mock data functions BEFORE loadData to avoid initialization error
+  const getMockClients = useCallback(() => [
+    { id: 'client-1', name: 'TechCorp', email: 'orders@techcorp.com', company: 'TechCorp Inc' },
+    { id: 'client-2', name: 'StartupXYZ', email: 'hello@startupxyz.io', company: 'StartupXYZ' },
+    { id: 'client-3', name: 'Local Shop', email: 'info@localshop.ee', company: 'Local Shop OÜ' },
+    { id: 'client-4', name: 'Walk-in', email: null, company: null },
+    { id: 'client-5', name: 'PrototypeCo', email: 'design@prototype.co', company: 'PrototypeCo' },
+  ], []);
+
+  const getMockOrders = useCallback(() => [
+    { id: 'o1', client_id: 'client-1', client_name: 'TechCorp', total_amount: 400, cost: 95, status: 'completed', created_at: '2024-12-20' },
+    { id: 'o2', client_id: 'client-1', client_name: 'TechCorp', total_amount: 250, cost: 80, status: 'completed', created_at: '2024-12-25' },
+    { id: 'o3', client_id: 'client-1', client_name: 'TechCorp', total_amount: 180, cost: 45, status: 'completed', created_at: '2024-12-28' },
+    { id: 'o4', client_id: 'client-2', client_name: 'StartupXYZ', total_amount: 600, cost: 200, status: 'completed', created_at: '2024-12-15' },
+    { id: 'o5', client_id: 'client-2', client_name: 'StartupXYZ', total_amount: 150, cost: 90, status: 'completed', created_at: '2024-12-22' },
+    { id: 'o6', client_id: 'client-3', client_name: 'Local Shop', total_amount: 80, cost: 35, status: 'completed', created_at: '2024-12-18' },
+    { id: 'o7', client_id: 'client-4', client_name: 'Walk-in', total_amount: 25, cost: 8, status: 'completed', created_at: '2024-12-30' },
+    { id: 'o8', client_id: 'client-4', client_name: 'Walk-in', total_amount: 15, cost: 5, status: 'completed', created_at: '2024-12-30' },
+    { id: 'o9', client_id: 'client-5', client_name: 'PrototypeCo', total_amount: 800, cost: 450, status: 'completed', created_at: '2024-12-10' },
+    { id: 'o10', client_id: 'client-5', client_name: 'PrototypeCo', total_amount: 200, cost: 180, status: 'cancelled', created_at: '2024-12-12' },
+  ], []);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -41,27 +63,6 @@ function ClientProfitability() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const getMockClients = useCallback(() => [
-    { id: 'client-1', name: 'TechCorp', email: 'orders@techcorp.com', company: 'TechCorp Inc' },
-    { id: 'client-2', name: 'StartupXYZ', email: 'hello@startupxyz.io', company: 'StartupXYZ' },
-    { id: 'client-3', name: 'Local Shop', email: 'info@localshop.ee', company: 'Local Shop OÜ' },
-    { id: 'client-4', name: 'Walk-in', email: null, company: null },
-    { id: 'client-5', name: 'PrototypeCo', email: 'design@prototype.co', company: 'PrototypeCo' },
-  ], []);
-
-  const getMockOrders = useCallback(() => [
-    { id: 'o1', client_id: 'client-1', client_name: 'TechCorp', total_amount: 400, cost: 95, status: 'completed', created_at: '2024-12-20' },
-    { id: 'o2', client_id: 'client-1', client_name: 'TechCorp', total_amount: 250, cost: 80, status: 'completed', created_at: '2024-12-25' },
-    { id: 'o3', client_id: 'client-1', client_name: 'TechCorp', total_amount: 180, cost: 45, status: 'completed', created_at: '2024-12-28' },
-    { id: 'o4', client_id: 'client-2', client_name: 'StartupXYZ', total_amount: 600, cost: 200, status: 'completed', created_at: '2024-12-15' },
-    { id: 'o5', client_id: 'client-2', client_name: 'StartupXYZ', total_amount: 150, cost: 90, status: 'completed', created_at: '2024-12-22' },
-    { id: 'o6', client_id: 'client-3', client_name: 'Local Shop', total_amount: 80, cost: 35, status: 'completed', created_at: '2024-12-18' },
-    { id: 'o7', client_id: 'client-4', client_name: 'Walk-in', total_amount: 25, cost: 8, status: 'completed', created_at: '2024-12-30' },
-    { id: 'o8', client_id: 'client-4', client_name: 'Walk-in', total_amount: 15, cost: 5, status: 'completed', created_at: '2024-12-30' },
-    { id: 'o9', client_id: 'client-5', client_name: 'PrototypeCo', total_amount: 800, cost: 450, status: 'completed', created_at: '2024-12-10' },
-    { id: 'o10', client_id: 'client-5', client_name: 'PrototypeCo', total_amount: 200, cost: 180, status: 'cancelled', created_at: '2024-12-12' },
-  ], []);
 
   // Filter orders by date range
   const getFilteredOrders = () => {

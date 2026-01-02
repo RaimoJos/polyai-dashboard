@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api, unwrap } from '../services/api';
+import { api } from '../services/api';
 import { useLanguage } from '../i18n';
 
 /**
@@ -55,10 +55,11 @@ function TodayDashboard({ currentUser, onNavigate }) {
         api.getInventoryAlerts().catch(() => []),
       ]);
 
-      const orders = extractArray(unwrap(ordersRes));
-      const printers = extractArray(unwrap(printersRes));
-      const jobs = extractArray(unwrap(jobsRes));
-      const alerts = extractArray(unwrap(alertsRes));
+      // API responses are already unwrapped by api.js
+      const orders = extractArray(ordersRes);
+      const printers = extractArray(printersRes);
+      const jobs = extractArray(jobsRes);
+      const alerts = extractArray(alertsRes);
 
       setData({ orders, printers, jobs, alerts, recentActivity: [] });
     } catch (err) {
@@ -69,7 +70,8 @@ function TodayDashboard({ currentUser, onNavigate }) {
   };
 
   const loadTodayTasks = () => {
-    const saved = localStorage.getItem('polywerk_daily_tasks');
+    // Use sessionStorage instead of localStorage for XSS safety
+    const saved = sessionStorage.getItem('polywerk_daily_tasks');
     if (saved) {
       try {
         const tasks = JSON.parse(saved);
@@ -84,7 +86,8 @@ function TodayDashboard({ currentUser, onNavigate }) {
   };
 
   const saveTasks = (tasks) => {
-    localStorage.setItem('polywerk_daily_tasks', JSON.stringify(tasks));
+    // Use sessionStorage instead of localStorage for XSS safety
+    sessionStorage.setItem('polywerk_daily_tasks', JSON.stringify(tasks));
     setTodayTasks(tasks);
   };
 
@@ -97,20 +100,20 @@ function TodayDashboard({ currentUser, onNavigate }) {
       created_at: new Date().toISOString(),
       user: currentUser?.username,
     };
-    const allTasks = JSON.parse(localStorage.getItem('polywerk_daily_tasks') || '[]');
+    const allTasks = JSON.parse(sessionStorage.getItem('polywerk_daily_tasks') || '[]');
     saveTasks([task, ...allTasks]);
     setNewTask('');
     setShowTaskInput(false);
   };
 
   const toggleTask = (taskId) => {
-    const allTasks = JSON.parse(localStorage.getItem('polywerk_daily_tasks') || '[]');
+    const allTasks = JSON.parse(sessionStorage.getItem('polywerk_daily_tasks') || '[]');
     const updated = allTasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t);
     saveTasks(updated);
   };
 
   const deleteTask = (taskId) => {
-    const allTasks = JSON.parse(localStorage.getItem('polywerk_daily_tasks') || '[]');
+    const allTasks = JSON.parse(sessionStorage.getItem('polywerk_daily_tasks') || '[]');
     saveTasks(allTasks.filter(t => t.id !== taskId));
   };
 

@@ -25,6 +25,14 @@ import {
   getRole,
   getPermissionMeta,
   getModuleMeta,
+  // Tab visibility
+  getTabVisibility,
+  isTabVisible,
+  // Financial data filtering
+  canViewFinancials,
+  filterFinancialData,
+  filterFinancialDataArray,
+  SENSITIVE_FINANCIAL_FIELDS,
 } from './PermissionsConfig';
 
 // ============================================================================
@@ -171,6 +179,55 @@ export const useIsAdmin = () => {
   return isAdmin;
 };
 
+/**
+ * useCanViewFinancials - Check if user can view financial/cost data
+ */
+export const useCanViewFinancials = () => {
+  const { user } = usePermissions();
+  return useMemo(() => canViewFinancials(user), [user]);
+};
+
+/**
+ * useFilterFinancials - Returns functions to filter financial data
+ * 
+ * @example
+ * const { filterData, filterArray } = useFilterFinancials();
+ * const safeOrder = filterData(order);
+ * const safeOrders = filterArray(orders);
+ */
+export const useFilterFinancials = () => {
+  const { user } = usePermissions();
+  
+  const filterData = useCallback((data) => {
+    return filterFinancialData(data, user);
+  }, [user]);
+  
+  const filterArray = useCallback((items) => {
+    return filterFinancialDataArray(items, user);
+  }, [user]);
+  
+  return { filterData, filterArray, canView: canViewFinancials(user) };
+};
+
+/**
+ * useTabVisibility - Get visible tabs for current user
+ * 
+ * @example
+ * const { visibleTabs, isTabVisible } = useTabVisibility();
+ * const tabs = allTabs.filter(t => visibleTabs[t.id]);
+ */
+export const useTabVisibility = () => {
+  const { user } = usePermissions();
+  
+  const visibleTabs = useMemo(() => getTabVisibility(user), [user]);
+  
+  const checkTabVisible = useCallback((tabId) => {
+    return isTabVisible(user, tabId);
+  }, [user]);
+  
+  return { visibleTabs, isTabVisible: checkTabVisible };
+};
+
 // ============================================================================
 // PERMISSION GATE COMPONENT
 // ============================================================================
@@ -233,6 +290,24 @@ export const AdminOnly = ({ fallback = null, children }) => {
 export const AuthenticatedOnly = ({ fallback = null, children }) => {
   const { isAuthenticated } = usePermissions();
   return isAuthenticated ? children : fallback;
+};
+
+/**
+ * FinancialsGate - Only render financial content for users with financial access
+ * Use this to hide revenue, profit, cost breakdowns from workers
+ * 
+ * @example
+ * <FinancialsGate>
+ *   <ProfitMarginDisplay value={order.profit_margin} />
+ * </FinancialsGate>
+ * 
+ * <FinancialsGate fallback={<span>--</span>}>
+ *   €{order.cost.toFixed(2)}
+ * </FinancialsGate>
+ */
+export const FinancialsGate = ({ fallback = null, children }) => {
+  const canView = useCanViewFinancials();
+  return canView ? children : fallback;
 };
 
 // ============================================================================
@@ -322,10 +397,14 @@ export default {
   useRole,
   useIsOwner,
   useIsAdmin,
+  useCanViewFinancials,
+  useFilterFinancials,
+  useTabVisibility,
   PermissionGate,
   OwnerOnly,
   AdminOnly,
   AuthenticatedOnly,
+  FinancialsGate,
   withPermissions,
   withPermissionGate,
   PermissionDebug,

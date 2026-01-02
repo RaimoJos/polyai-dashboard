@@ -11,9 +11,12 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { 
   PermissionsProvider, 
   usePermissions, 
+  useTabVisibility,
   PermissionGate,
   OwnerOnly,
-  AdminOnly 
+  AdminOnly,
+  FinancialsGate,
+  getTabVisibility,
 } from './permissions';
 import { 
   UserProfile as PermissionsUserProfile,
@@ -146,142 +149,9 @@ import './App.css';
 
 const logo = process.env.PUBLIC_URL + '/Polywerk_newlogo_color.png';
 
-// Role-based access:
-// - owner: Full access to everything (business owner)
-// - partner: Business partner - can manage team, NO AI tab
-// - print_manager: Manages print operations, scheduling, QC
-// - modeler: 3D modeling, file preparation, slicing
-// - technician: Printer operation, maintenance
-// - sales: Customer service, orders, quotes
-const ROLE_PERMISSIONS = {
-  owner: {
-    home: true,
-    business: true,
-    printers: true,
-    production: true,
-    calendar: true,
-    files: true,
-    inventory: true,
-    reports: true,
-    ai: true,
-    marketing: true,
-    config: true,
-    manageUsers: true,
-  },
-  partner: {
-    home: true,
-    business: true,
-    printers: true,
-    production: true,
-    calendar: true,
-    files: true,
-    inventory: true,
-    reports: true,
-    ai: false,
-    marketing: true,
-    config: true,
-    manageUsers: true,
-  },
-  print_manager: {
-    home: true,
-    business: true,
-    printers: true,
-    production: true,
-    calendar: true,
-    files: true,
-    inventory: true,
-    reports: true,
-    ai: false,
-    marketing: false,
-    config: true,
-    manageUsers: false,
-  },
-  modeler: {
-    home: true,
-    business: true,
-    printers: false,
-    production: false,
-    calendar: true,
-    files: true,
-    inventory: false,
-    reports: false,
-    ai: false,
-    marketing: false,
-    config: false,
-    manageUsers: false,
-  },
-  technician: {
-    home: true,
-    business: false,
-    printers: true,
-    production: true,
-    calendar: true,
-    files: true,
-    inventory: true,
-    reports: false,
-    ai: false,
-    marketing: false,
-    config: false,
-    manageUsers: false,
-  },
-  sales: {
-    home: true,
-    business: true,
-    printers: false,
-    production: false,
-    calendar: true,
-    files: false,
-    inventory: true,
-    reports: true,
-    ai: false,
-    marketing: true,
-    config: false,
-    manageUsers: false,
-  },
-  // Legacy support
-  worker: {
-    home: true,
-    business: true,
-    printers: true,
-    production: true,
-    calendar: true,
-    files: true,
-    inventory: true,
-    reports: true,
-    ai: false,
-    marketing: false,
-    config: false,
-    manageUsers: false,
-  },
-  manager: {
-    home: true,
-    business: true,
-    printers: true,
-    production: true,
-    calendar: true,
-    files: true,
-    inventory: true,
-    reports: true,
-    ai: false,
-    marketing: false,
-    config: true,
-    manageUsers: false,
-  },
-  operator: {
-    home: true,
-    business: true,
-    printers: true,
-    production: true,
-    calendar: true,
-    files: true,
-    inventory: true,
-    reports: false,
-    ai: false,
-    marketing: false,
-    config: false,
-    manageUsers: false,
-  },
-};
+// NOTE: Tab visibility permissions are now managed in permissions/PermissionsConfig.js
+// Use getTabVisibility(user) to get tab permissions for a user.
+// This consolidates role-based access into a single source of truth.
 
 function AppContent() {
   const { t } = useLanguage();
@@ -388,9 +258,8 @@ function AppContent() {
     return <LoginPage onLogin={handleLogin} />;
   }
 
-  // Get permissions for current user's role (legacy system - kept for backward compatibility)
-  const userRole = currentUser.role?.toLowerCase() || 'worker';
-  const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.worker;
+  // Get tab visibility permissions from centralized permissions system
+  const permissions = getTabVisibility(currentUser);
 
   // Wrap authenticated content with PermissionsProvider
   return (
@@ -1179,10 +1048,10 @@ function ConfigTabContent({ currentUser, onUserUpdate }) {
   const [customRoles, setCustomRoles] = useState([]);
 
   // Check if user has permission to manage users
-  const userRole = currentUser?.role?.toLowerCase() || 'operator';
-  const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.operator;
+  // Use centralized permissions system
+  const permissions = getTabVisibility(currentUser);
   const canManageUsers = permissions.manageUsers;
-  const isOwner = userRole === 'owner';
+  const isOwner = currentUser?.role?.toLowerCase() === 'owner';
 
   // Load custom roles from sessionStorage (not localStorage for security)
   useEffect(() => {
