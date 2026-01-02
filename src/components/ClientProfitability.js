@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api, unwrap } from '../services/api';
 
 /**
@@ -13,11 +13,7 @@ function ClientProfitability() {
   const [sortBy, setSortBy] = useState('profit');
   const [selectedClient, setSelectedClient] = useState(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       // Load clients
@@ -40,17 +36,21 @@ function ClientProfitability() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getMockClients, getMockOrders]);
 
-  const getMockClients = () => [
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const getMockClients = useCallback(() => [
     { id: 'client-1', name: 'TechCorp', email: 'orders@techcorp.com', company: 'TechCorp Inc' },
     { id: 'client-2', name: 'StartupXYZ', email: 'hello@startupxyz.io', company: 'StartupXYZ' },
     { id: 'client-3', name: 'Local Shop', email: 'info@localshop.ee', company: 'Local Shop OÜ' },
     { id: 'client-4', name: 'Walk-in', email: null, company: null },
     { id: 'client-5', name: 'PrototypeCo', email: 'design@prototype.co', company: 'PrototypeCo' },
-  ];
+  ], []);
 
-  const getMockOrders = () => [
+  const getMockOrders = useCallback(() => [
     { id: 'o1', client_id: 'client-1', client_name: 'TechCorp', total_amount: 400, cost: 95, status: 'completed', created_at: '2024-12-20' },
     { id: 'o2', client_id: 'client-1', client_name: 'TechCorp', total_amount: 250, cost: 80, status: 'completed', created_at: '2024-12-25' },
     { id: 'o3', client_id: 'client-1', client_name: 'TechCorp', total_amount: 180, cost: 45, status: 'completed', created_at: '2024-12-28' },
@@ -61,7 +61,7 @@ function ClientProfitability() {
     { id: 'o8', client_id: 'client-4', client_name: 'Walk-in', total_amount: 15, cost: 5, status: 'completed', created_at: '2024-12-30' },
     { id: 'o9', client_id: 'client-5', client_name: 'PrototypeCo', total_amount: 800, cost: 450, status: 'completed', created_at: '2024-12-10' },
     { id: 'o10', client_id: 'client-5', client_name: 'PrototypeCo', total_amount: 200, cost: 180, status: 'cancelled', created_at: '2024-12-12' },
-  ];
+  ], []);
 
   // Filter orders by date range
   const getFilteredOrders = () => {
@@ -113,7 +113,12 @@ function ClientProfitability() {
     filteredOrders.forEach(order => {
       const clientId = order.client_id || 'unknown';
       if (!metrics[clientId]) {
-        metrics[clientId] = metrics['unknown'];
+        // Create a new unique object for each unknown client
+        metrics[clientId] = {
+          client: { id: clientId, name: order.client_name || 'Unknown/Walk-in', email: null },
+          revenue: 0, cost: 0, profit: 0, orderCount: 0, completedOrders: 0,
+          cancelledOrders: 0, avgOrderValue: 0, margin: 0, firstOrder: null, lastOrder: null, orders: [],
+        };
       }
 
       const m = metrics[clientId];
@@ -140,7 +145,13 @@ function ClientProfitability() {
       m.avgOrderValue = m.completedOrders > 0 ? m.revenue / m.completedOrders : 0;
     });
 
-    return Object.values(metrics).filter(m => m.orderCount > 0);
+    // Return unique metrics, avoiding duplicate keys
+    const seen = new Set();
+    return Object.values(metrics).filter(m => {
+      if (seen.has(m.client.id)) return false;
+      seen.add(m.client.id);
+      return m.orderCount > 0;
+    });
   };
 
   const clientMetrics = getClientMetrics();

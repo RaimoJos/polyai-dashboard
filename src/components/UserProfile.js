@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, unwrap } from '../services/api';
+import { sanitizeText } from '../utils/sanitization';
 import { useLanguage } from '../i18n';
 
 /**
@@ -314,15 +315,14 @@ function UserProfile({ currentUser, onUserUpdate }) {
         {activeTab === 'profile' && (
           <form onSubmit={handleProfileSave} className="space-y-6">
             <div className="flex items-center gap-6 pb-6 border-b border-slate-700">
-              <div 
-                className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold"
+              <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold"
                 style={{ background: 'linear-gradient(135deg, #a855f7 0%, #06b6d4 100%)' }}
               >
-                {(profile.full_name || currentUser?.username || 'U')[0].toUpperCase()}
+                {(sanitizeText(profile.full_name) || currentUser?.username || 'U')[0].toUpperCase()}
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">{profile.full_name || currentUser?.username}</h3>
-                <p className="text-slate-400">@{currentUser?.username}</p>
+                <h3 className="text-xl font-semibold text-white">{sanitizeText(profile.full_name) || currentUser?.username}</h3>
+                <p className="text-slate-400">@{sanitizeText(currentUser?.username)}</p>
               </div>
             </div>
 

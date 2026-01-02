@@ -30,8 +30,10 @@ const LoginPage = ({ onLogin }) => {
         payload?.token;
 
       const storedToken = token || 'session';
+      // FIXED: Use ONLY sessionStorage, never localStorage (XSS vulnerability)
       sessionStorage.setItem('authToken', storedToken);
-      localStorage.setItem('authToken', storedToken);
+      // Remove any existing tokens from localStorage for security
+      localStorage.removeItem('authToken');
       setAuthToken(storedToken);
 
       const userDisplay = {
@@ -44,7 +46,8 @@ const LoginPage = ({ onLogin }) => {
       if (sessionData?.permissions) {
         sessionStorage.setItem('userPermissions', JSON.stringify(sessionData.permissions));
       }
-      localStorage.setItem('currentUser', JSON.stringify(userDisplay));
+      // FIXED: Remove from localStorage and keep only in sessionStorage
+      localStorage.removeItem('currentUser');
 
       onLogin(sessionData);
     } catch (err) {

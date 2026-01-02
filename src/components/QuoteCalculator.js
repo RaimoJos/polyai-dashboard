@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api, unwrap } from '../services/api';
+import { formatErrorMessage, logError } from '../utils/apiSafety';
 import toast from '../utils/toast';
 import { useLanguage } from '../i18n';
 
@@ -46,17 +47,19 @@ const QuoteCalculator = () => {
         api.getPricingConfig(),
       ]);
 
-      const c = unwrap(clientsRes);
-      const inv = unwrap(invRes);
-      const cfg = unwrap(cfgRes);
+      // API responses are already safely unwrapped
+      const c = clientsRes || [];
+      const inv = invRes?.spools || invRes || [];
+      const cfg = cfgRes || {};
       
       setClients(Array.isArray(c) ? c : (c?.clients || []));
       const spoolsList = Array.isArray(inv) ? inv : (inv?.spools || inv?.inventory || inv?.materials || inv?.items || []);
       setInventory(spoolsList);
       setConfig(cfg);
     } catch (e) {
-      console.error('Error loading quote data:', e);
-      setError(e?.message || t('common.noData'));
+      const msg = formatErrorMessage(e, { action: 'load quote data' });
+      setError(msg);
+      logError(e, { component: 'QuoteCalculator', action: 'loadData' });
     } finally {
       setLoading(false);
     }
@@ -65,9 +68,11 @@ const QuoteCalculator = () => {
   const loadFiles = async () => {
     try {
       const res = await api.listFiles();
-      const body = unwrap(res) || res || {};
+      // API returns {files: [...]} or already unwrapped
+      const body = res || {};
       setAvailableFiles(Array.isArray(body.files) ? body.files : (Array.isArray(body) ? body : []));
     } catch (e) {
+      logError(e, { component: 'QuoteCalculator', action: 'loadFiles' });
       setAvailableFiles([]);
     }
   };
@@ -149,21 +154,20 @@ const QuoteCalculator = () => {
             client_type: 'walk-in',
             notes: 'Walk-in customer'
           });
-          const created = unwrap(newClient);
-          clientId = created?.client_id || created?.id || null;
+          // API already unwraps, just get the ID
+          clientId = newClient?.client_id || newClient?.id || null;
           clientName = walkInName.trim();
           
-          const clientsRes = await api.getClients();
-          const c = unwrap(clientsRes);
+          const c = await api.getClients();
           setClients(Array.isArray(c) ? c : (c?.clients || []));
           
           toast.success(`${t('clients.addClient')}: "${walkInName}"!`);
           
-          // Switch to the new client
           setIsWalkIn(false);
           setSelectedClient(clientId);
         } catch (e) {
           console.warn('Could not create walk-in client:', e);
+          logError(e, { component: 'QuoteCalculator', action: 'createWalkInClient', clientName: walkInName });
         }
       }
 

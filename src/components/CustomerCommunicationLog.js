@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { sanitizeText } from '../utils/sanitization';
 
 /**
  * CustomerCommunicationLog - Track all interactions with customers
@@ -257,10 +258,10 @@ function CustomerCommunicationLog({ customerId, customerName }) {
                     </button>
                   </div>
                   
-                  <p className="text-white font-medium mt-1">{log.subject}</p>
+                  <p className="text-white font-medium mt-1">{sanitizeText(log.subject)}</p>
                   
                   {log.content && (
-                    <p className="text-slate-400 text-sm mt-1">{log.content}</p>
+                    <p className="text-slate-400 text-sm mt-1">{sanitizeText(log.content)}</p>
                   )}
 
                   {log.outcome && (

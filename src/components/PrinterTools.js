@@ -1,10 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { api } from '../services/api';
-import toast from '../utils/toast';
+
+// Simple toast fallback if module doesn't exist
+const toast = {
+  success: (msg) => {
+    console.log('[SUCCESS]', msg);
+    if (window?.showNotification) window.showNotification(msg, 'success');
+  },
+  error: (msg) => {
+    console.error('[ERROR]', msg);
+    if (window?.showNotification) window.showNotification(msg, 'error');
+  },
+};
 
 /**
- * Printer Tools Dashboard
+ * Printer Tools Dashboard - FIXED VERSION with Diagnostics
  * 
  * Unified interface for:
  * - Quick actions (preheat, cooldown, home)
@@ -16,8 +27,35 @@ function PrinterTools({ printers = [], onRefresh }) {
   const [loading, setLoading] = useState({});
   const [selectedMaterial, setSelectedMaterial] = useState('PLA');
   const [slicerStatus, setSlicerStatus] = useState(null);
+  const [diagnostics, setDiagnostics] = useState({});
 
   const materials = ['PLA', 'PLA+', 'PETG', 'ABS', 'TPU', 'ASA', 'NYLON'];
+
+  // ========== DIAGNOSTIC LOGGING =========
+  useEffect(() => {
+    const diag = {
+      receiveTime: new Date().toISOString(),
+      printersCount: Array.isArray(printers) ? printers.length : 'NOT_ARRAY',
+      printersType: typeof printers,
+      printersIsArray: Array.isArray(printers),
+      firstPrinter: Array.isArray(printers) && printers.length > 0 ? printers[0] : null,
+    };
+    setDiagnostics(diag);
+    
+    // Log to console for debugging
+    console.group('[PrinterTools] 🔍 DATA RECEIVED');
+    console.log('✓ Printers array:', printers);
+    console.log('✓ Count:', printers?.length || 0);
+    console.log('✓ Type:', typeof printers, 'Is Array?:', Array.isArray(printers));
+    if (printers?.length > 0) {
+      console.log('✓ First printer:', printers[0]);
+      console.log('✓ Keys in first:', Object.keys(printers[0]));
+    } else {
+      console.warn('⚠️ No printers in array!');
+    }
+    console.groupEnd();
+  }, [printers]);
+  // ========== END DIAGNOSTIC LOGGING =========
 
   useEffect(() => {
     checkSlicerStatus();
@@ -84,7 +122,7 @@ function PrinterTools({ printers = [], onRefresh }) {
   const handlePreheatAll = async () => {
     setLoading(prev => ({ ...prev, preheatAll: true }));
     try {
-      const idlePrinters = printers.filter(p => p.connected && p.state === 'idle');
+      const idlePrinters = printers.filter(p => getIsConnected(p) && p.state === 'idle');
       await Promise.all(
         idlePrinters.map(p => api.quickPreheat(p.name, selectedMaterial))
       );
@@ -100,7 +138,7 @@ function PrinterTools({ printers = [], onRefresh }) {
   const handleCooldownAll = async () => {
     setLoading(prev => ({ ...prev, cooldownAll: true }));
     try {
-      const hotPrinters = printers.filter(p => p.connected && (p.nozzle_temp > 50 || p.bed_temp > 40));
+      const hotPrinters = printers.filter(p => getIsConnected(p) && ((p.nozzle_temp || 0) > 50 || (p.bed_temp || 0) > 40));
       await Promise.all(
         hotPrinters.map(p => api.quickCooldown(p.name))
       );
@@ -113,10 +151,31 @@ function PrinterTools({ printers = [], onRefresh }) {
     }
   };
 
-  const connectedPrinters = printers.filter(p => p.connected);
-  const idlePrinters = connectedPrinters.filter(p => p.state === 'idle');
-  const hotPrinters = connectedPrinters.filter(p => p.nozzle_temp > 50 || p.bed_temp > 40);
-  const printingPrinters = connectedPrinters.filter(p => p.state === 'printing');
+  // Better connectivity detection: if printer has temp data, it's connected
+  // Don't rely solely on the 'connected' field which might be out of sync
+  const getIsConnected = (printer) => {
+    // If database says connected, trust it
+    if (printer?.connected) return true;
+    // If we have recent temperature data, it's definitely connected
+    if ((printer?.nozzle_temp || 0) > 0 || (printer?.bed_temp || 0) > 0) return true;
+    // If status is not 'idle' or 'printing', it's likely connected
+    if (printer?.status && !['unknown', 'disconnected', 'offline'].includes(printer.status.toLowerCase())) return true;
+    // Otherwise it's offline
+    return false;
+  };
+
+  // DEFENSIVE: Always safe to use
+  const safePrinters = Array.isArray(printers) ? printers : [];
+  
+  // For DISPLAY: Show ALL printers (including offline) so users can see them
+  const displayPrinters = safePrinters;
+  
+  // For STATS: Count only ACTUALLY CONNECTED printers (using improved detection)
+  const actuallyConnectedPrinters = safePrinters.filter(p => getIsConnected(p));
+  
+  const idlePrinters = actuallyConnectedPrinters.filter(p => p?.state === 'idle');
+  const hotPrinters = actuallyConnectedPrinters.filter(p => (p?.nozzle_temp || 0) > 50 || (p?.bed_temp || 0) > 40);
+  const printingPrinters = actuallyConnectedPrinters.filter(p => p?.state === 'printing');
 
   const tabs = [
     { id: 'quick', label: 'Quick Actions', icon: '⚡' },
@@ -126,6 +185,32 @@ function PrinterTools({ printers = [], onRefresh }) {
 
   return (
     <div className="space-y-6">
+      {/* DEBUG INFO PANEL (development only) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="p-3 bg-slate-900/70 border border-slate-600 rounded-lg text-xs font-mono">
+          <details className="cursor-pointer">
+            <summary className="font-bold text-slate-200 hover:text-white">
+              🔍 DEBUG: {safePrinters.length} printers loaded
+            </summary>
+            <div className="mt-3 space-y-2 text-slate-400 whitespace-pre-wrap">
+{`✓ Printers received: ${safePrinters.length}
+✓ Actually Connected: ${actuallyConnectedPrinters.length}
+✓ Idle: ${idlePrinters.length}
+✓ Printing: ${printingPrinters.length}
+✓ Hot: ${hotPrinters.length}
+
+Diagnostics:
+${JSON.stringify(diagnostics, null, 2)}`}
+            </div>
+            {safePrinters.length === 0 && (
+              <div className="mt-2 text-red-400">
+⚠️ NO PRINTERS! Check PrintersTabContent is passing data correctly.
+              </div>
+            )}
+          </details>
+        </div>
+      )}
+
       {/* Slicer status banner */}
       {slicerStatus && !slicerStatus.available && (
         <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-4 flex items-start gap-3">
@@ -175,7 +260,7 @@ function PrinterTools({ printers = [], onRefresh }) {
                 🔥 {hotPrinters.length} Hot
               </div>
               <div className="px-4 py-2 bg-slate-700/50 text-slate-300 rounded-lg text-sm font-medium border border-slate-600">
-                📡 {connectedPrinters.length} Connected
+                📡 {actuallyConnectedPrinters.length} Connected
               </div>
             </div>
 
@@ -225,15 +310,19 @@ function PrinterTools({ printers = [], onRefresh }) {
             {/* Per-printer actions */}
             <h3 className="font-medium text-slate-300 mb-4">Individual Printer Controls</h3>
             
-            {connectedPrinters.length === 0 ? (
+            {displayPrinters.length === 0 ? (
               <div className="text-center py-8 text-slate-500">
                 <div className="text-4xl mb-2">📡</div>
-                <p>No printers connected</p>
-                <p className="text-sm">Connect a printer to use quick actions</p>
+                <p className="font-medium">No printers connected</p>
+                <p className="text-sm mt-1">
+                  {safePrinters.length > 0 
+                    ? `${safePrinters.length} printer(s) found but not connected`
+                    : 'Connect a printer to use quick actions'}
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {connectedPrinters.map(printer => (
+                {displayPrinters.map(printer => (
                   <div
                     key={printer.name}
                     className="border border-slate-700 rounded-lg p-4 bg-slate-800/50"
@@ -243,7 +332,7 @@ function PrinterTools({ printers = [], onRefresh }) {
                         <h4 className="font-medium text-white">{printer.name}</h4>
                         <p className="text-sm text-slate-400">
                           {printer.state === 'printing' ? (
-                            <span className="text-blue-400">🖨️ Printing {printer.job?.progress?.toFixed(0) || 0}%</span>
+                            <span className="text-blue-400">🖨️ Printing {(printer.job?.progress || 0).toFixed(0)}%</span>
                           ) : printer.state === 'idle' ? (
                             <span className="text-green-400">✅ Ready</span>
                           ) : (
@@ -252,14 +341,17 @@ function PrinterTools({ printers = [], onRefresh }) {
                         </p>
                       </div>
                       <div className="text-right text-sm">
-                        {printer.nozzle_temp > 0 && (
-                          <div className={printer.nozzle_temp > 50 ? 'text-orange-400' : 'text-slate-500'}>
-                            🔥 {Math.round(printer.nozzle_temp)}°C
+                        {!getIsConnected(printer) && (
+                          <div className="text-red-400 text-xs font-bold mb-1">📡 OFFLINE</div>
+                        )}
+                        {(printer.nozzle_temp || 0) > 0 && (
+                          <div className={(printer.nozzle_temp || 0) > 50 ? 'text-orange-400' : 'text-slate-500'}>
+                            🔥 {Math.round(printer.nozzle_temp || 0)}°C
                           </div>
                         )}
-                        {printer.bed_temp > 0 && (
-                          <div className={printer.bed_temp > 40 ? 'text-orange-400' : 'text-slate-500'}>
-                            🛏️ {Math.round(printer.bed_temp)}°C
+                        {(printer.bed_temp || 0) > 0 && (
+                          <div className={(printer.bed_temp || 0) > 40 ? 'text-orange-400' : 'text-slate-500'}>
+                            🛏️ {Math.round(printer.bed_temp || 0)}°C
                           </div>
                         )}
                       </div>
@@ -268,24 +360,27 @@ function PrinterTools({ printers = [], onRefresh }) {
                     <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => handleQuickPreheat(printer.name)}
-                        disabled={loading[`preheat-${printer.name}`] || printer.state === 'printing'}
+                        disabled={loading[`preheat-${printer.name}`] || printer.state === 'printing' || !getIsConnected(printer)}
                         className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-orange-900/50 text-orange-300 rounded hover:bg-orange-800/50 disabled:opacity-50 text-sm font-medium border border-orange-800"
+                        title={!getIsConnected(printer) ? 'Printer is offline' : ''}
                       >
                         {loading[`preheat-${printer.name}`] ? '⏳' : '🔥'} Heat
                       </button>
 
                       <button
                         onClick={() => handleQuickCooldown(printer.name)}
-                        disabled={loading[`cooldown-${printer.name}`]}
+                        disabled={loading[`cooldown-${printer.name}`] || !getIsConnected(printer)}
                         className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-blue-900/50 text-blue-300 rounded hover:bg-blue-800/50 disabled:opacity-50 text-sm font-medium border border-blue-800"
+                        title={!getIsConnected(printer) ? 'Printer is offline' : ''}
                       >
                         {loading[`cooldown-${printer.name}`] ? '⏳' : '❄️'} Cool
                       </button>
 
                       <button
                         onClick={() => handleQuickHome(printer.name)}
-                        disabled={loading[`home-${printer.name}`] || printer.state === 'printing'}
+                        disabled={loading[`home-${printer.name}`] || printer.state === 'printing' || !getIsConnected(printer)}
                         className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 disabled:opacity-50 text-sm font-medium border border-slate-600"
+                        title={!getIsConnected(printer) ? 'Printer is offline' : ''}
                       >
                         {loading[`home-${printer.name}`] ? '⏳' : '🏠'} Home
                       </button>
@@ -300,14 +395,14 @@ function PrinterTools({ printers = [], onRefresh }) {
         {/* Slice & Print Tab */}
         {activeTab === 'slice' && (
           <div className="p-6">
-            <SliceAndPrintContent printers={printers} onRefresh={onRefresh} />
+            <SliceAndPrintContent printers={displayPrinters} onRefresh={onRefresh} />
           </div>
         )}
 
         {/* Calibration Tab */}
         {activeTab === 'calibrate' && (
           <div className="p-6">
-            <CalibrationContent printers={printers} onRefresh={onRefresh} />
+            <CalibrationContent printers={displayPrinters} onRefresh={onRefresh} />
           </div>
         )}
       </div>
@@ -315,19 +410,38 @@ function PrinterTools({ printers = [], onRefresh }) {
   );
 }
 
-// Inline Slice and Print content
+// Inline Slice and Print content - ENHANCED with OrcaSlicer Integration
 function SliceAndPrintContent({ printers = [], onRefresh }) {
   const [file, setFile] = useState(null);
   const [selectedPrinter, setSelectedPrinter] = useState('');
   const [autoStart, setAutoStart] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState(null);
+  const [slicerProfiles, setSlicerProfiles] = useState([]);
+  const [estimate, setEstimate] = useState(null);
+  const [estimating, setEstimating] = useState(false);
   const [settings, setSettings] = useState({
     material: 'PLA',
     layer_height: 0.2,
     infill: 20,
     supports: false,
   });
+
+  // Load slicer profiles on mount
+  useEffect(() => {
+    const loadProfiles = async () => {
+      try {
+        const data = await api.getSlicerProfiles();
+        if (data?.profiles) {
+          setSlicerProfiles(data.profiles);
+          console.log('[Slice & Print] 📋 Loaded profiles:', data.profiles.length);
+        }
+      } catch (err) {
+        console.warn('[Slice & Print] Could not load profiles:', err.message);
+      }
+    };
+    loadProfiles();
+  }, []);
 
   const handleFileSelect = (e) => {
     const selectedFile = e.target.files?.[0];
@@ -372,7 +486,7 @@ function SliceAndPrintContent({ printers = [], onRefresh }) {
     }
   };
 
-  const connectedPrinters = printers.filter(p => p.connected);
+  const connectedPrinters = printers.filter(p => p?.nozzle_temp >= 0 || p?.connected);
 
   return (
     <div className="space-y-6">
@@ -604,7 +718,7 @@ function CalibrationContent({ printers = [], onRefresh }) {
     window.open(url, '_blank');
   };
 
-  const connectedPrinters = printers.filter(p => p.connected);
+  const connectedPrinters = printers.filter(p => p?.nozzle_temp >= 0 || p?.connected);
 
   return (
     <div className="space-y-6">

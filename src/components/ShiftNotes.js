@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { sanitizeText } from '../utils/sanitization';
 
 /**
  * ShiftNotes - End-of-day notes and shift handover
@@ -247,7 +248,8 @@ function ShiftNotes({ currentUser }) {
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">{categoryIcons[note.category] || '📋'}</span>
                     <div>
-                      <h3 className="font-medium text-white">{note.title}</h3>
+                      {/* FIXED: Sanitize note title to prevent XSS */}
+                      <h3 className="font-medium text-white">{sanitizeText(note.title)}</h3>
                       <div className="flex items-center gap-2 text-sm text-slate-400">
                         <span>{note.author}</span>
                         <span>•</span>
@@ -280,9 +282,9 @@ function ShiftNotes({ currentUser }) {
                   </div>
                 </div>
 
-                {/* Content */}
+                {/* FIXED: Sanitize note content to prevent XSS */}
                 <div className="text-slate-300 whitespace-pre-wrap mb-3">
-                  {note.content}
+                  {sanitizeText(note.content)}
                 </div>
 
                 {/* Action Items */}
@@ -293,7 +295,8 @@ function ShiftNotes({ currentUser }) {
                       {note.action_items.map((item, idx) => (
                         <li key={idx} className="flex items-center gap-2 text-sm text-white">
                           <span className="text-purple-400">•</span>
-                          {item}
+                          {/* FIXED: Sanitize action item text to prevent XSS */}
+                          {sanitizeText(item)}
                         </li>
                       ))}
                     </ul>

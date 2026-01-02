@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
+import { sanitizeText } from '../utils/sanitization';
 import { useLanguage } from '../i18n';
 
 /**
@@ -290,7 +291,7 @@ function TimeTracker({ currentUser }) {
         Math.round((e.break_time_seconds || 0) / 60),
         e.task_type || 'general',
         e.order_name || 'General',
-        `"${(e.notes || '').replace(/"/g, '""')}"`,
+        `"${(sanitizeText(e.notes) || '').replace(/"/g, '""')}"`,
       ].join(','))
     ].join('\n');
     
@@ -636,7 +637,7 @@ function TimeTracker({ currentUser }) {
                           {formatDate(entry.started_at)} • {formatTime(entry.started_at)} - {formatTime(entry.ended_at)}
                         </p>
                         {entry.notes && (
-                          <p className="text-sm text-slate-500 truncate">{entry.notes}</p>
+                          <p className="text-sm text-slate-500 truncate">{sanitizeText(entry.notes)}</p>
                         )}
                       </div>
                       <div className="text-right">

@@ -8,15 +8,15 @@ function normalizeProgress(raw) {
   const n = Number(raw);
   if (!Number.isFinite(n)) return 0;
 
-  // If backend gives [0..1], convert to percent
-  if (n > 0 && n <= 1) return Math.round(n * 100);
-  // If backend gives [0..100], keep
+  // FIXED: Handle 0 explicitly in decimal range [0..1]
+  if (n >= 0 && n <= 1) return Math.round(n * 100);
+  // If backend gives [1..100], keep as-is
   if (n > 1 && n <= 100) return Math.round(n);
 
   // Clamp anything else
-  if (n < 0) return 0;
   if (n > 100) return 100;
-  return Math.round(n);
+  
+  return 0; // Explicit fallback
 }
 
 function PrinterDashboard() {

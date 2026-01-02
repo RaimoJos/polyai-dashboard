@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api, unwrap } from '../services/api';
+import { sanitizeText } from '../utils/sanitization';
 import { useLanguage } from '../i18n';
 import toast from '../utils/toast';
 
@@ -345,17 +346,17 @@ const PrintFailureLog = ({ currentUser }) => {
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-white">{failure.file_name}</span>
+                        <span className="font-medium text-white">{sanitizeText(failure.file_name)}</span>
                         <span className={`px-2 py-0.5 rounded text-xs bg-${reasonInfo.color}-900/50 text-${reasonInfo.color}-400 border border-${reasonInfo.color}-700/50`}>
                           {reasonInfo.label}
                         </span>
                       </div>
                       <p className="text-sm text-zinc-400 mt-1">
-                        🖨️ {failure.printer_name} • 🧵 {failure.material_type}
+                        🖨️ {sanitizeText(failure.printer_name)} • 🧵 {sanitizeText(failure.material_type)}
                         {failure.material_wasted_g > 0 && ` • ${failure.material_wasted_g}g wasted`}
                       </p>
                       {failure.notes && (
-                        <p className="text-sm text-zinc-500 mt-1 truncate">{failure.notes}</p>
+                        <p className="text-sm text-zinc-500 mt-1 truncate">{sanitizeText(failure.notes)}</p>
                       )}
                     </div>
                     
@@ -613,15 +614,15 @@ const FailureDetailModal = ({ failure, reasonInfo, onReprint, onClose }) => {
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <p className="text-zinc-500">File</p>
-              <p className="text-white font-medium">{failure.file_name}</p>
+              <p className="text-white font-medium">{sanitizeText(failure.file_name)}</p>
             </div>
             <div>
               <p className="text-zinc-500">Printer</p>
-              <p className="text-white">{failure.printer_name}</p>
+              <p className="text-white">{sanitizeText(failure.printer_name)}</p>
             </div>
             <div>
               <p className="text-zinc-500">Material</p>
-              <p className="text-white">{failure.material_type}</p>
+              <p className="text-white">{sanitizeText(failure.material_type)}</p>
             </div>
             <div>
               <p className="text-zinc-500">Wasted</p>
@@ -633,7 +634,7 @@ const FailureDetailModal = ({ failure, reasonInfo, onReprint, onClose }) => {
           {failure.notes && (
             <div>
               <p className="text-zinc-500 text-sm mb-1">Notes</p>
-              <p className="bg-gray-800 rounded-lg p-3 text-white text-sm">{failure.notes}</p>
+              <p className="bg-gray-800 rounded-lg p-3 text-white text-sm">{sanitizeText(failure.notes)}</p>
             </div>
           )}
 

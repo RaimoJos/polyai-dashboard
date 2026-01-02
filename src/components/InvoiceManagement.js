@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api, unwrap } from '../services/api';
+import { sanitizeText } from '../utils/sanitization';
 import { useLanguage } from '../i18n';
 import toast from '../utils/toast';
 
@@ -341,7 +342,7 @@ const InvoiceManagement = () => {
                         {invoice.invoice_number}
                       </p>
                       <p className="text-sm text-slate-400">
-                        {invoice.client_name || t('common.unknown')}
+                        {sanitizeText(invoice.client_name) || t('common.unknown')}
                       </p>
                     </div>
                   </div>
@@ -463,7 +464,7 @@ const InvoiceManagement = () => {
                       {createModal.order_number || `#${createModal.order_id?.slice(-6)}`}
                     </p>
                     <p className="text-sm text-slate-400">
-                      {createModal.client_name || createModal.customer_name}
+                      {sanitizeText(createModal.client_name) || sanitizeText(createModal.customer_name)}
                     </p>
                   </div>
                   <p className="text-lg font-bold text-green-400">
@@ -532,7 +533,7 @@ const InvoiceManagement = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xl font-bold text-white">{detailsModal.invoice_number}</h3>
-                  <p className="text-slate-400">{detailsModal.client_name}</p>
+                  <p className="text-slate-400">{sanitizeText(detailsModal.client_name)}</p>
                 </div>
                 <span className={`px-3 py-1.5 rounded-full text-sm border ${getStatusColor(detailsModal)}`}>
                   {getStatusLabel(detailsModal)}

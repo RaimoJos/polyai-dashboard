@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
+import { safeUnwrap, formatErrorMessage, logError } from '../utils/apiSafety';
+import { sanitizeText } from '../utils/sanitization';
 import { useLanguage } from '../i18n';
 import toast from '../utils/toast';
 import ClientOrderHistory from './ClientOrderHistory';
@@ -44,11 +46,16 @@ const ClientList = () => {
     try {
       setLoading(true);
       const res = await api.getClients({ status: filterStatus });
-      const clientData = Array.isArray(res) ? res : (res?.data ?? res?.clients ?? []);
-      setClients(clientData);
+      // FIXED: Use safeUnwrap for response validation
+      const clientData = safeUnwrap(res, 'array') ?? res ?? [];
+      setClients(Array.isArray(clientData) ? clientData : (clientData?.data ?? clientData?.clients ?? []));
     } catch (err) {
-      console.error('Error fetching clients:', err);
+      // FIXED: User-friendly error message
+      const msg = formatErrorMessage(err, { action: 'load clients' });
+      toast.error(msg);
       setClients([]);
+      // FIXED: Log error with context
+      logError(err, { component: 'ClientList', action: 'fetchClients', filterStatus });
     } finally {
       setLoading(false);
     }
@@ -180,7 +187,7 @@ const ClientList = () => {
       {showForm && (
         <form onSubmit={handleSubmit} className="mb-6 bg-gray-800/50 border border-gray-700 p-4 rounded-xl space-y-3">
           <h3 className="font-semibold mb-2 text-white">
-            {editingClient ? `${t('clients.editClient')}: ${editingClient.name}` : t('clients.addClient')}
+            {editingClient ? `${t('clients.editClient')}: ${sanitizeText(editingClient.name)}` : t('clients.addClient')}
           </h3>
           <div className="grid grid-cols-2 gap-3">
             <input 
@@ -272,14 +279,14 @@ const ClientList = () => {
             <div className="flex justify-between items-start">
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="font-semibold text-white">{client.name}</p>
+                  <p className="font-semibold text-white">{sanitizeText(client.name)}</p>
                   {client.status === 'inactive' && (
                     <span className="px-2 py-0.5 bg-gray-700 text-zinc-400 rounded text-xs">{t('common.inactive')}</span>
                   )}
                 </div>
-                {client.company && <p className="text-sm text-zinc-400">{client.company}</p>}
-                <p className="text-sm text-zinc-500">{client.email}</p>
-                {client.phone && <p className="text-xs text-zinc-600">{client.phone}</p>}
+                {client.company && <p className="text-sm text-zinc-400">{sanitizeText(client.company)}</p>}
+                <p className="text-sm text-zinc-500">{sanitizeText(client.email)}</p>
+                {client.phone && <p className="text-xs text-zinc-600">{sanitizeText(client.phone)}</p>}
               </div>
               
               <div className="text-right mr-4">

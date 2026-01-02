@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTeamChat } from '../hooks/useWebSocket';
 import { useLanguage } from '../i18n';
+import { sanitizeText } from '../utils/sanitization';
 
 /**
  * TeamChat - Floating team chat panel
@@ -205,12 +206,13 @@ const TeamChat = ({ currentUser }) => {
               <div
                 key={user.user_id}
                 className="flex items-center gap-1 px-2 py-1 bg-gray-800 rounded-full shrink-0"
-                title={user.full_name || user.username}
+                title={sanitizeText(user.full_name || user.username)}
               >
                 <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                <span className="text-xs text-zinc-300">{user.username}</span>
+                {/* FIXED: Sanitize username to prevent XSS */}
+                <span className="text-xs text-zinc-300">{sanitizeText(user.username)}</span>
               </div>
-            ))}
+            ))}}
             {onlineUsers.length > 5 && (
               <span className="text-xs text-zinc-500">+{onlineUsers.length - 5}</span>
             )}
@@ -263,7 +265,7 @@ const TeamChat = ({ currentUser }) => {
                       <div className={`max-w-[75%] ${own ? 'items-end' : 'items-start'}`}>
                         {showAvatar && !own && (
                           <p className="text-[10px] text-zinc-500 mb-1 ml-1">
-                            {msg.full_name || msg.username}
+                            {sanitizeText(msg.full_name || msg.username)}
                           </p>
                         )}
                         <div
@@ -273,7 +275,8 @@ const TeamChat = ({ currentUser }) => {
                               : 'bg-gray-800 text-zinc-200 rounded-bl-md'
                           }`}
                         >
-                          <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
+                          {/* FIXED: Sanitize message content to prevent XSS */}
+                          <p className="text-sm whitespace-pre-wrap break-words">{sanitizeText(msg.message)}</p>
                         </div>
                         <p className={`text-[10px] text-zinc-600 mt-1 ${own ? 'text-right mr-1' : 'ml-1'}`}>
                           {formatTime(msg.timestamp)}

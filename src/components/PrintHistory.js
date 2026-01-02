@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api, unwrap } from '../services/api';
+import { safeUnwrap, logError } from '../utils/apiSafety';
 import FailureDiagnosisPanel, { QuickDiagnosisButton } from './FailureDiagnosisPanel';
 
 const PrintHistory = () => {
@@ -109,7 +110,8 @@ const PrintHistory = () => {
       setHistory(prints);
       calculateStats(prints);
     } catch (err) {
-      console.error('Failed to load print history:', err);
+      // FIXED: Log error with context
+      logError(err, { component: 'PrintHistory', action: 'loadHistory', dateRange });
       setHistory([]);
       calculateStats([]);
     } finally {

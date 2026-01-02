@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, unwrap } from '../services/api';
+import { sanitizeText } from '../utils/sanitization';
 
 /**
  * FeedbackReporter - Floating bug/feedback reporting widget
@@ -306,13 +307,14 @@ function FeedbackReporter({ currentUser }) {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <span>{typeInfo.icon}</span>
+                              {/* FIXED: Sanitize issue title to prevent XSS */}
                               <span className="font-medium text-white text-sm truncate">
-                                {issue.title}
+                                {sanitizeText(issue.title)}
                               </span>
                             </div>
                             {issue.description && (
                               <p className="text-xs text-slate-400 line-clamp-2 mb-2">
-                                {issue.description}
+                                {sanitizeText(issue.description)}
                               </p>
                             )}
                             <div className="flex items-center gap-2 text-xs text-slate-500">

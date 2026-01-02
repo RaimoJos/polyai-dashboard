@@ -19,13 +19,40 @@ const http = axios.create({
   },
 });
 
+// FIXED: Add CSRF token to request headers if available
+http.interceptors.request.use((config) => {
+  // Get CSRF token from meta tag or cookie
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ||
+    getCookie('csrf-token');
+  
+  if (csrfToken && ['post', 'put', 'delete', 'patch'].includes(config.method?.toLowerCase())) {
+    config.headers['X-CSRF-Token'] = csrfToken;
+  }
+  
+  return config;
+});
+
+// Helper function to get cookie by name
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(';').shift();
+  return null;
+}
+
 // Cache endpoints that appear to be unimplemented (404/405) to avoid repeated network spam.
 const _missingEndpointCache = new Set();
 
 // Clear the cache - useful when server might have restarted
 export function clearMissingEndpointCache() {
   _missingEndpointCache.clear();
-  console.log('Cleared missing endpoint cache');
+  console.log('✅ Cleared missing endpoint cache');
+}
+
+// Expose to window for debugging
+if (typeof window !== 'undefined') {
+  window.clearApiCache = clearMissingEndpointCache;
+  console.log('[API] Call window.clearApiCache() to clear endpoint cache');
 }
 
 export class ApiError extends Error {

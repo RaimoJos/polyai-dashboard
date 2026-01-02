@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { logError } from '../utils/apiSafety';
 import { useLanguage } from '../i18n';
 import { QuickDiagnosisButton } from './FailureDiagnosisPanel';
 
@@ -46,12 +47,17 @@ const JobQueue = () => {
           setLoading(false);
           return;
         }
-      } catch (e) {}
+      } catch (e) {
+        // FIXED: Log error but continue to fallback
+        logError(e, { component: 'JobQueue', action: 'fetchJobsFromProduction' });
+      }
       
       const res = await axios.get(`${API_BASE}/scheduling/queue`);
       setJobs(res.data.jobs || []);
     } catch (err) {
-      console.error('Error fetching jobs:', err);
+      // FIXED: Log error with context
+      logError(err, { component: 'JobQueue', action: 'fetchJobs' });
+      setJobs([]);
     } finally {
       setLoading(false);
     }
@@ -61,7 +67,10 @@ const JobQueue = () => {
     try {
       const res = await axios.get(`${API_BASE}/materials/spools?active_only=true`);
       setInventory(res.data.spools || []);
-    } catch (err) {}
+    } catch (err) {
+      // FIXED: Log error but don't break UX
+      logError(err, { component: 'JobQueue', action: 'fetchInventory' });
+    }
   };
 
   const checkMaterialStatus = (materialType, requiredG = 0) => {

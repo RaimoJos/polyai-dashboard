@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { api, unwrap } from '../services/api';
+import { safeUnwrap, formatErrorMessage, logError } from '../utils/apiSafety';
 import toast from '../utils/toast';
 import { useLanguage } from '../i18n';
 import PaymentTracker from './PaymentTracker';
@@ -42,13 +43,18 @@ const OrderManagement = () => {
       setError(null);
       const params = filterStatus === 'all' ? {} : { status: filterStatus };
       const res = await api.listOrders(params);
-      const ordersData = unwrap(res) ?? res ?? [];
+      // FIXED: Use safeUnwrap for response validation
+      const ordersData = safeUnwrap(res, 'array') ?? res ?? [];
       const orders = Array.isArray(ordersData) ? ordersData : (ordersData?.orders ?? ordersData?.data ?? []);
       setActiveOrders(orders);
+      setError(null);
     } catch (err) {
-      console.error('Failed to load orders:', err);
-      setError(t('common.noData'));
+      // FIXED: User-friendly error message
+      const msg = formatErrorMessage(err, { action: 'load orders' });
+      setError(msg);
       setActiveOrders([]);
+      // FIXED: Log error with context
+      logError(err, { component: 'OrderManagement', action: 'fetchOrders', filterStatus });
     } finally {
       setLoading(false);
     }
@@ -57,9 +63,12 @@ const OrderManagement = () => {
   const fetchAvailableFiles = async () => {
     try {
       const res = await api.listFiles();
-      const body = unwrap(res) || res || {};
+      // FIXED: Use safeUnwrap for response validation
+      const body = safeUnwrap(res, 'object') || res || {};
       setAvailableFiles(Array.isArray(body.files) ? body.files : (Array.isArray(body) ? body : []));
     } catch (err) {
+      // FIXED: Log error but don't break UX
+      logError(err, { component: 'OrderManagement', action: 'fetchAvailableFiles' });
       setAvailableFiles([]);
     }
   };
@@ -250,7 +259,8 @@ const OrderManagement = () => {
         total: order.quote?.total || 0
       });
 
-      const invoice = unwrap(res) || res?.data || null;
+      // FIXED: Use safeUnwrap for response validation
+      const invoice = safeUnwrap(res, 'object') || res?.data || null;
       await api.updateOrder(order.order_id, { 
         invoice_number: invoice?.invoice_number,
         payment_status: 'invoiced'
@@ -260,7 +270,11 @@ const OrderManagement = () => {
       setInvoiceModal({ order, invoice });
       fetchOrders();
     } catch (err) {
-      toast.error('Failed to generate invoice');
+      // FIXED: User-friendly error message
+      const msg = formatErrorMessage(err, { action: 'generate invoice' });
+      toast.error(msg);
+      // FIXED: Log error with context
+      logError(err, { component: 'OrderManagement', action: 'handleGenerateInvoice', order_id: order.order_id });
     } finally {
       setActionLoading(null);
     }

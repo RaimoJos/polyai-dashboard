@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { sanitizeText } from '../utils/sanitization';
 
 /**
  * NotificationCenter - Central hub for all alerts and notifications
@@ -270,7 +271,8 @@ function NotificationCenter({ currentUser, isOpen, onClose }) {
                     <span className="text-xl">{notif.icon}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="font-medium text-white">{notif.title}</p>
+                        {/* FIXED: Sanitize notification title to prevent XSS */}
+                        <p className="font-medium text-white">{sanitizeText(notif.title)}</p>
                         <button
                           onClick={() => dismissNotification(notif.id)}
                           className="text-slate-500 hover:text-white flex-shrink-0"
@@ -278,7 +280,8 @@ function NotificationCenter({ currentUser, isOpen, onClose }) {
                           ✕
                         </button>
                       </div>
-                      <p className="text-sm text-slate-400 mt-0.5">{notif.message}</p>
+                      {/* FIXED: Sanitize notification message to prevent XSS */}
+                      <p className="text-sm text-slate-400 mt-0.5">{sanitizeText(notif.message)}</p>
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-xs text-slate-500">
                           {formatTimeAgo(notif.created_at)}

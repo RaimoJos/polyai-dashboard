@@ -5,6 +5,7 @@ import ConfigTab from './components/ConfigTab';
 import { api, setAuthToken } from './services/api';
 import { LanguageProvider, LanguageSelector, useLanguage } from './i18n';
 import { safeJsonParse } from './utils/safeJson';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Permissions System
 import { 
@@ -42,6 +43,14 @@ import NotificationCenter, { NotificationBell, useNotificationCount } from './co
 // Printers
 import PrinterDashboard from './components/PrinterDashboard';
 import PrinterTools from './components/PrinterTools';
+import PrintersTabContent from './components/PrintersTabContent';
+
+// NEW: Phase A, B, C Enhancements
+import PrinterToolsEnhanced from './components/PrinterToolsEnhanced';
+import StatisticsDashboard from './components/StatisticsDashboard';
+import PrintProgressTracker from './components/PrintProgressTracker';
+import { AlertProvider } from './components/AlertSystem';
+import ExportPanel from './components/ExportSystem';
 
 // Production  
 import JobQueue from './components/JobQueue';
@@ -286,8 +295,9 @@ function AppContent() {
   const notificationCount = useNotificationCount();
 
   useEffect(() => {
-    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
-    const userData = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+    // FIXED: Only check sessionStorage for tokens (localStorage is XSS vulnerable)
+    const token = sessionStorage.getItem('authToken');
+    const userData = sessionStorage.getItem('currentUser');
 
     if (token && userData) {
       setAuthToken(token);
@@ -299,23 +309,17 @@ function AppContent() {
             const parsedUser = safeJsonParse(userData, null);
             if (!parsedUser) {
               sessionStorage.clear();
-              localStorage.removeItem('authToken');
-              localStorage.removeItem('currentUser');
               setAuthToken(null);
               return;
             }
             setCurrentUser(parsedUser);
           } else {
             sessionStorage.clear();
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('currentUser');
             setAuthToken(null);
           }
         })
         .catch(() => {
           sessionStorage.clear();
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('currentUser');
           setAuthToken(null);
         })
         .finally(() => {
@@ -341,12 +345,13 @@ function AppContent() {
       full_name: sessionData.full_name,
       role: sessionData.role || 'worker'
     };
+    // FIXED: Only store in sessionStorage, not localStorage
     sessionStorage.setItem('currentUser', JSON.stringify(userDisplay));
-    localStorage.setItem('currentUser', JSON.stringify(userDisplay));
   };
 
   const handleLogout = async () => {
-    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+    // FIXED: Only check sessionStorage
+    const token = sessionStorage.getItem('authToken');
     if (token) {
       try {
         await api.logout(token);
@@ -354,10 +359,9 @@ function AppContent() {
         console.error('Logout error:', err);
       }
     }
+    // FIXED: Clear only sessionStorage, localStorage already cleared at login
     sessionStorage.removeItem('authToken');
     sessionStorage.removeItem('currentUser');
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('currentUser');
     setCurrentUser(null);
     setActiveTab('home');
   };
@@ -365,8 +369,8 @@ function AppContent() {
   const handleUserUpdate = (updatedUser) => {
     setCurrentUser(prev => ({ ...prev, ...updatedUser }));
     const updated = { ...currentUser, ...updatedUser };
+    // FIXED: Only update sessionStorage, never localStorage
     sessionStorage.setItem('currentUser', JSON.stringify(updated));
-    localStorage.setItem('currentUser', JSON.stringify(updated));
   };
 
   if (authLoading) {
@@ -866,63 +870,7 @@ function AITabContent() {
   );
 }
 
-// Printers Tab with sub-navigation
-function PrintersTabContent() {
-  const { t } = useLanguage();
-  const [printersSubTab, setPrintersSubTab] = useState('dashboard');
-  const [printers, setPrinters] = useState([]);
 
-  // Load printers for tools
-  useEffect(() => {
-    const loadPrinters = async () => {
-      try {
-        const data = await api.getPrinters();
-        // Normalize printer data
-        const printerList = data?.printers || data?.data?.printers || [];
-        setPrinters(printerList.map(p => ({
-          name: p.name,
-          state: p.state || p.status || 'unknown',
-          connected: p.connected ?? p.is_online ?? false,
-          nozzle_temp: p.nozzle_temp ?? p.temperatures?.nozzle?.actual ?? 0,
-          bed_temp: p.bed_temp ?? p.temperatures?.bed?.actual ?? 0,
-          job: p.job || {},
-        })));
-      } catch (err) {
-        console.error('Failed to load printers:', err);
-      }
-    };
-    loadPrinters();
-    const interval = setInterval(loadPrinters, 5000); // Refresh every 5s
-    return () => clearInterval(interval);
-  }, []);
-
-  const subTabs = [
-    { id: 'dashboard', nameKey: 'nav.dashboard', icon: '🖨️' },
-    { id: 'tools', label: 'Tools', icon: '🔧' },
-    { id: 'cameras', nameKey: 'nav.cameras', icon: '📷' },
-  ];
-
-  return (
-    <>
-      <div className="sub-nav mb-4">
-        {subTabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setPrintersSubTab(tab.id)}
-            className={`sub-nav-tab ${printersSubTab === tab.id ? 'active' : ''}`}
-          >
-            <span className="mr-2 opacity-70">{tab.icon}</span>
-            {tab.nameKey ? t(tab.nameKey) : tab.label}
-          </button>
-        ))}
-      </div>
-      
-      {printersSubTab === 'dashboard' && <PrinterDashboard />}
-      {printersSubTab === 'tools' && <PrinterTools printers={printers} />}
-      {printersSubTab === 'cameras' && <PrinterCameraGrid />}
-    </>
-  );
-}
 
 // Calendar Tab with sub-navigation
 function CalendarTabContent({ currentUser }) {
@@ -1090,9 +1038,11 @@ function ProductionTabContent({ currentUser }) {
 // Reports Tab with sub-navigation
 function ReportsTabContent() {
   const { t } = useLanguage();
-  const [reportsSubTab, setReportsSubTab] = useState('financial');
+  const [reportsSubTab, setReportsSubTab] = useState('statistics');
+  const [printers] = useState([]); // Get printers from your state management
 
   const subTabs = [
+    { id: 'statistics', label: 'Statistics', icon: '📊' },
     { id: 'financial', nameKey: 'nav.financial', icon: '💰' },
     { id: 'profitability', nameKey: 'nav.profitability', icon: '📈' },
     { id: 'clients', nameKey: 'nav.clientProfit', icon: '👥' },
@@ -1117,6 +1067,7 @@ function ReportsTabContent() {
         ))}
       </div>
       
+      {reportsSubTab === 'statistics' && <StatisticsDashboard printers={printers} />}
       {reportsSubTab === 'financial' && <FinancialReports />}
       {reportsSubTab === 'profitability' && <JobProfitability />}
       {reportsSubTab === 'clients' && <ClientProfitability />}
@@ -1134,9 +1085,9 @@ function InventoryTabContent() {
   const [inventorySubTab, setInventorySubTab] = useState('overview');
   const [spools, setSpools] = useState([]);
 
-  // Load spools for QR manager
+  // Load spools for QR manager (using sessionStorage - not localStorage for security)
   useEffect(() => {
-    const savedSpools = localStorage.getItem('polywerk_spools');
+    const savedSpools = sessionStorage.getItem('polywerk_spools');
     if (savedSpools) {
       try {
         setSpools(JSON.parse(savedSpools));
@@ -1147,10 +1098,10 @@ function InventoryTabContent() {
   }, [inventorySubTab]);
 
   const handleSpoolUpdate = (spoolId, updates) => {
-    const savedSpools = localStorage.getItem('polywerk_spools');
+    const savedSpools = sessionStorage.getItem('polywerk_spools');
     let spoolsList = savedSpools ? JSON.parse(savedSpools) : [];
     spoolsList = spoolsList.map(s => s.id === spoolId ? { ...s, ...updates } : s);
-    localStorage.setItem('polywerk_spools', JSON.stringify(spoolsList));
+    sessionStorage.setItem('polywerk_spools', JSON.stringify(spoolsList));
     setSpools(spoolsList);
   };
 
@@ -1233,9 +1184,9 @@ function ConfigTabContent({ currentUser, onUserUpdate }) {
   const canManageUsers = permissions.manageUsers;
   const isOwner = userRole === 'owner';
 
-  // Load custom roles from localStorage
+  // Load custom roles from sessionStorage (not localStorage for security)
   useEffect(() => {
-    const saved = localStorage.getItem('polywerk_custom_roles');
+    const saved = sessionStorage.getItem('polywerk_custom_roles');
     if (saved) {
       try {
         setCustomRoles(JSON.parse(saved));
@@ -1248,13 +1199,13 @@ function ConfigTabContent({ currentUser, onUserUpdate }) {
   const handleCreateRole = (newRole) => {
     const updated = [...customRoles, newRole];
     setCustomRoles(updated);
-    localStorage.setItem('polywerk_custom_roles', JSON.stringify(updated));
+    sessionStorage.setItem('polywerk_custom_roles', JSON.stringify(updated));
   };
 
   const handleUpdateRole = (updatedRole) => {
     const updated = customRoles.map(r => r.id === updatedRole.id ? updatedRole : r);
     setCustomRoles(updated);
-    localStorage.setItem('polywerk_custom_roles', JSON.stringify(updated));
+    sessionStorage.setItem('polywerk_custom_roles', JSON.stringify(updated));
   };
 
   const subTabs = [
@@ -1364,19 +1315,23 @@ function App() {
   }
 
   return (
-    <LanguageProvider>
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          style: {
-            background: '#18181b',
-            color: '#fafafa',
-            border: '1px solid #27272a',
-          },
-        }}
-      />
-      <AppContent />
-    </LanguageProvider>
+    <ErrorBoundary>
+      <AlertProvider>
+        <LanguageProvider>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              style: {
+                background: '#18181b',
+                color: '#fafafa',
+                border: '1px solid #27272a',
+              },
+            }}
+          />
+          <AppContent />
+        </LanguageProvider>
+      </AlertProvider>
+    </ErrorBoundary>
   );
 }
 
